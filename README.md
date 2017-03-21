@@ -1,4 +1,4 @@
-# Welcome to fman's community page
+# Welcome to fman's community
 
 This page hosts fman's [issue tracker](https://github.com/fman-community/fman/issues). You can use it to request features and file bugs, but also for general discussion (if you like).
 
