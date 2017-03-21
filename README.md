@@ -1,6 +1,6 @@
 # Welcome to fman's issue tracker!
 
-You can use it to request features and file bugs, but also for general discussion (if you like).
+You can use it to request features and file bugs, but also for general discussion (if you like). [Click here](https://github.com/fman-community/fman/issues) (or on the "Issues" link above) to see all topics.
 
 Issues are prioritised by the number of votes they receive. You can vote on issues using [GitHub's Reactions feature](https://github.com/blog/2119-add-reactions-to-pull-requests-issues-and-comments).
 
