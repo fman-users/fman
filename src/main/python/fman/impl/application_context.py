@@ -89,6 +89,8 @@ class DevelopmentApplicationContext(ApplicationContext):
 	def fman_version(self):
 		return self.build_settings['version']
 	def on_main_window_shown(self):
+		if is_mac():
+			self._preload_core_services()
 		if self.updater:
 			self.updater.start()
 		if self.is_licensed:
@@ -104,6 +106,18 @@ class DevelopmentApplicationContext(ApplicationContext):
 				self.tour_controller.start(tutorial)
 			else:
 				self.splash_screen.exec()
+	def _preload_core_services(self):
+		from threading import Thread
+		def _load():
+			try:
+				from objc import loadBundle
+				loadBundle(
+					'CoreServices.framework', {},
+					bundle_identifier='com.apple.CoreServices'
+				)
+			except Exception:
+				pass
+		Thread(target=_load, daemon=True).start()
 	def on_main_window_close(self):
 		self.session_manager.on_close(self.main_window)
 	def on_quit(self):
