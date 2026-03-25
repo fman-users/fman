@@ -38,11 +38,11 @@ def freeze():
 	copy_python_library('osxtrash', path('${core_plugin_in_freeze_dir}'))
 	import osxtrash
 	so_name = basename(osxtrash.__file__)
-	# Move the .so file to the correct location according to macOS's app bundle
-	# structure, so it is codesigned:
+	# Move the .so to Frameworks (where PyInstaller 6.x sets sys._MEIPASS),
+	# so it's both importable and codesigned:
 	move(
 		path('${core_plugin_in_freeze_dir}/' + so_name),
-		path('${freeze_dir}/Contents/MacOS')
+		path('${freeze_dir}/Contents/Frameworks')
 	)
 	move(
 		path('${core_plugin_in_freeze_dir}/bin/mac/7za'),

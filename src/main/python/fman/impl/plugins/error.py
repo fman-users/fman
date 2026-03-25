@@ -101,6 +101,18 @@ class TracebackExceptionWithTbFilter(TracebackException):
 				_seen=_seen,
 				tb_filter=tb_filter
 			)
+		if (exc_value and exc_value.__context__ is not None
+			and id(exc_value.__context__) not in _seen):
+			self.__context__ = TracebackExceptionWithTbFilter(
+				type(exc_value.__context__),
+				exc_value.__context__,
+				exc_value.__context__.__traceback__,
+				limit=limit,
+				lookup_lines=False,
+				capture_locals=capture_locals,
+				_seen=_seen,
+				tb_filter=tb_filter
+			)
 		# Override stack with filtered version
 		self.stack = StackSummary.extract(
 			walk_tb_with_filtering(exc_traceback, tb_filter), limit=limit,
