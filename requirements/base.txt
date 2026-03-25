@@ -1,7 +1,7 @@
 http://build-system.fman.io/pro/b5aab865-bd29-4f23-992c-0eb4f3a24f33/0.9.4#egg=fbs[sentry]
 PyQt5==5.15.11
-PyInstaller==4.4
-rsa==3.4.2
+PyInstaller==6.11.1
+rsa==4.9
 tinycss==0.4
-boto3==1.17.26
-requests==2.25.1
+boto3==1.35.99
+requests==2.32.3
