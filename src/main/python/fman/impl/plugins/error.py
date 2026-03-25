@@ -3,7 +3,7 @@ from fbs_runtime.excepthook import ExceptionHandler
 from fman.impl.theme import ThemeError
 from fman.impl.util import is_below_dir
 from os.path import dirname, basename
-from traceback import StackSummary, _some_str, extract_tb, TracebackException, \
+from traceback import StackSummary, extract_tb, TracebackException, \
 	print_exception
 
 import fman
@@ -127,7 +127,10 @@ class TracebackExceptionWithTbFilter(TracebackException):
 		else:
 			self.__suppress_context__ = False
 		self.exc_type = exc_type
-		self._str = _some_str(exc_value)
+		try:
+			self._str = str(exc_value)
+		except Exception:
+			self._str = '<unprintable %s object>' % type(exc_value).__name__
 		if exc_type and issubclass(exc_type, SyntaxError):
 			self.filename = exc_value.filename
 			self.lineno = str(exc_value.lineno)
