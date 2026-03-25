@@ -80,11 +80,18 @@ class TracebackExceptionWithTbFilter(TracebackException):
 	):
 		if _seen is None:
 			_seen = set()
-		_seen.add(exc_value)
+		_seen.add(id(exc_value))
+		# Let super handle all standard attributes (exc_type, _str,
+		# exceptions, etc.) — some became read-only properties in Python 3.14.
+		super().__init__(
+			exc_type, exc_value, exc_traceback,
+			limit=limit, lookup_lines=False,
+			capture_locals=capture_locals
+		)
+		# Override cause/context with tb_filter-aware versions
 		if (exc_value and exc_value.__cause__ is not None
-			and exc_value.__cause__ not in _seen):
-			# This differs from stdlib's implementation:
-			cause = TracebackExceptionWithTbFilter(
+			and id(exc_value.__cause__) not in _seen):
+			self.__cause__ = TracebackExceptionWithTbFilter(
 				type(exc_value.__cause__),
 				exc_value.__cause__,
 				exc_value.__cause__.__traceback__,
@@ -94,49 +101,16 @@ class TracebackExceptionWithTbFilter(TracebackException):
 				_seen=_seen,
 				tb_filter=tb_filter
 			)
-		else:
-			cause = None
-		if (exc_value and exc_value.__context__ is not None
-			and exc_value.__context__ not in _seen):
-			# This differs from stdlib's implementation:
-			context = TracebackExceptionWithTbFilter(
-				type(exc_value.__context__),
-				exc_value.__context__,
-				exc_value.__context__.__traceback__,
-				limit=limit,
-				lookup_lines=False,
-				capture_locals=capture_locals,
-				_seen=_seen,
-				tb_filter=tb_filter
-			)
-		else:
-			context = None
-		self.exc_traceback = exc_traceback
-		self.__cause__ = cause
-		self.__context__ = context
-		# This differs from stdlib's implementation:
+		# Override stack with filtered version
 		self.stack = StackSummary.extract(
 			walk_tb_with_filtering(exc_traceback, tb_filter), limit=limit,
 			lookup_lines=lookup_lines, capture_locals=capture_locals
 		)
-		# This differs from stdlib's implementation:
 		if exc_value:
+			context = self.__context__
 			# Hide context when all its frames are hidden:
 			self.__suppress_context__ = exc_value.__suppress_context__ or \
 										(context and not context.stack.format())
-		else:
-			self.__suppress_context__ = False
-		self.exc_type = exc_type
-		try:
-			self._str = str(exc_value)
-		except Exception:
-			self._str = '<unprintable %s object>' % type(exc_value).__name__
-		if exc_type and issubclass(exc_type, SyntaxError):
-			self.filename = exc_value.filename
-			self.lineno = str(exc_value.lineno)
-			self.text = exc_value.text
-			self.offset = exc_value.offset
-			self.msg = exc_value.msg
 		if lookup_lines:
 			self._load_lines()
 
