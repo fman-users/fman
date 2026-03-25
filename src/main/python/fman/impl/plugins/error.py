@@ -66,7 +66,7 @@ def format_traceback(exc, exclude_dirs):
 
 class TracebackExceptionWithTbFilter(TracebackException):
 	"""
-	Copied and adapted from Python 3.5.3's `TracebackException`. Adds one
+	Copied and adapted from Python's `TracebackException`. Adds one
 	additional constructor arg: `tb_filter`, a boolean predicate that determines
 	which traceback entries should be included.
 	"""
@@ -83,7 +83,7 @@ class TracebackExceptionWithTbFilter(TracebackException):
 		_seen.add(exc_value)
 		if (exc_value and exc_value.__cause__ is not None
 			and exc_value.__cause__ not in _seen):
-			# This differs from Python 3.5.3's implementation:
+			# This differs from stdlib's implementation:
 			cause = TracebackExceptionWithTbFilter(
 				type(exc_value.__cause__),
 				exc_value.__cause__,
@@ -98,7 +98,7 @@ class TracebackExceptionWithTbFilter(TracebackException):
 			cause = None
 		if (exc_value and exc_value.__context__ is not None
 			and exc_value.__context__ not in _seen):
-			# This differs from Python 3.5.3's implementation:
+			# This differs from stdlib's implementation:
 			context = TracebackExceptionWithTbFilter(
 				type(exc_value.__context__),
 				exc_value.__context__,
@@ -114,12 +114,12 @@ class TracebackExceptionWithTbFilter(TracebackException):
 		self.exc_traceback = exc_traceback
 		self.__cause__ = cause
 		self.__context__ = context
-		# This differs from Python 3.5.3's implementation:
+		# This differs from stdlib's implementation:
 		self.stack = StackSummary.extract(
 			walk_tb_with_filtering(exc_traceback, tb_filter), limit=limit,
 			lookup_lines=lookup_lines, capture_locals=capture_locals
 		)
-		# This differs from Python 3.5.3's implementation:
+		# This differs from stdlib's implementation:
 		if exc_value:
 			# Hide context when all its frames are hidden:
 			self.__suppress_context__ = exc_value.__suppress_context__ or \
