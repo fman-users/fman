@@ -1,3 +1,3 @@
 -r base.txt
 osxtrash==1.6
-pyobjc-core==10.3.1
+pyobjc-core==12.1
