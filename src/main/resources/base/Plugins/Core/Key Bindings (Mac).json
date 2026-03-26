@@ -26,5 +26,6 @@
 	{ "keys": ["Shift+Space"], "command": "quick_look" },
 	{ "keys": ["Cmd+Enter"], "command": "open_selected_files" },
 	{ "keys": ["Cmd+Ctrl+F"], "command": "toggle_fullscreen" },
-	{ "keys": ["F3"], "command": "toggle_preview" }
+	{ "keys": ["F3"], "command": "toggle_preview" },
+	{ "keys": ["Cmd+Y"], "command": "toggle_preview" }
 ]
