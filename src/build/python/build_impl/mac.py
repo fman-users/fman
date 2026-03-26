@@ -50,6 +50,10 @@ def freeze():
 		path('${core_plugin_in_freeze_dir}/bin/mac/7za'),
 		path('${freeze_dir}/Contents/MacOS')
 	)
+	# Ad-hoc sign so macOS shows TCC permission dialogs for folder access.
+	# Without this, unsigned apps are silently denied access to Downloads etc.
+	run(['codesign', '--force', '--deep', '--sign', '-', path('${freeze_dir}')],
+		check=True)
 
 def _strip_unused_from_bundle():
 	frameworks = path('${freeze_dir}/Contents/Frameworks')
