@@ -34,11 +34,14 @@ class PreviewWidget(QWidget):
 		self._init_ui()
 
 	def _init_ui(self):
+		self.setMinimumWidth(0)
+		self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
 		layout = QVBoxLayout()
 		layout.setContentsMargins(0, 0, 0, 0)
 		layout.setSpacing(0)
 
 		self._header = QLabel()
+		self._header.setWordWrap(True)
 		self._header.setStyleSheet(
 			'QLabel { padding: 4px 8px; font-weight: bold; }'
 		)
