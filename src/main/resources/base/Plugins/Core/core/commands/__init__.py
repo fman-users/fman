@@ -1225,10 +1225,18 @@ def _deactivate_preview(pane):
 			)
 		except (TypeError, RuntimeError):
 			pass
+		target_widget = state['target_widget']
 		preview = state['preview_widget']
+		splitter = preview.parentWidget()
+		sizes = state['splitter_sizes']
+		# Remove preview and restore the original pane widget
+		preview.hide()
+		target_widget.show()
 		preview.setParent(None)
 		preview.deleteLater()
-		state['target_widget'].show()
+		# Restore the splitter proportions
+		if splitter and sizes:
+			splitter.setSizes(sizes)
 
 	_do_deactivate()
 
