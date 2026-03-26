@@ -25,12 +25,15 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 		self._fs = fs
 		self._null_location = null_location
 		self._filters = []
+		self._prepend_entries_fn = None
 		self._already_visited = set()
 		self._num_rows_to_preload = 0
 		self.set_location(null_location)
 		self._fs.file_removed.add_callback(self._on_file_removed)
 	def set_num_rows_to_preload(self, preload_rows):
 		self._num_rows_to_preload = preload_rows
+	def set_prepend_entries_fn(self, fn):
+		self._prepend_entries_fn = fn
 	def set_location(
 		self, url, sort_column='', ascending=True, callback=None, onerror=None
 	):
@@ -101,7 +104,8 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 			self._disconnect_signals(old_model)
 		new_model = Model(
 			self._fs, url, columns, sort_col_index, ascending,
-			self._num_rows_to_preload, self._filters
+			self._num_rows_to_preload, self._filters,
+			self._prepend_entries_fn
 		)
 		self.setSourceModel(new_model)
 		self._connect_signals(new_model)

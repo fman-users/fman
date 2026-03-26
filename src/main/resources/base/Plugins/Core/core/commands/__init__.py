@@ -1060,7 +1060,7 @@ def _toggle_hidden_files(pane, value):
 
 def _get_pane_info(pane):
 	settings = load_json('Panes.json', default=[])
-	default = {'show_hidden_files': False}
+	default = {'show_hidden_files': False, 'show_parent_dir_entry': False}
 	pane_index = pane.window.get_panes().index(pane)
 	for _ in range(pane_index - len(settings) + 1):
 		settings.append(default.copy())
@@ -1069,8 +1069,67 @@ def _get_pane_info(pane):
 def _hidden_file_filter(url):
 	if PLATFORM == 'Mac' and url == 'file:///Volumes':
 		return True
+	if basename(url) == '..':
+		return True  # Always pass '..' through; its own filter handles it
 	scheme, path = splitscheme(url)
 	return scheme != 'file://' or not is_hidden(path)
+
+class ToggleParentDirEntry(DirectoryPaneCommand):
+
+	aliases = ('Toggle parent directory entry',
+			   'Show / hide ".." parent directory entry')
+
+	def __call__(self):
+		_toggle_parent_dir_entry(
+			self.pane, not _is_parent_dir_entry_enabled(self.pane)
+		)
+
+class InitParentDirEntry(DirectoryPaneListener):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		# Set up the prepend function so ".." is included in initial loads.
+		self.pane._widget._model.set_prepend_entries_fn(_get_parent_entries)
+		if not _is_parent_dir_entry_enabled(self.pane):
+			_toggle_parent_dir_entry(self.pane, False)
+
+class ParentDirOpenListener(DirectoryPaneListener):
+	def on_command(self, command_name, args):
+		if command_name in ('open', 'open_directory'):
+			url = args.get('url', '')
+			if basename(url) == '..':
+				go_up(self.pane)
+				return 'noop', {}
+		return None
+
+class Noop(DirectoryPaneCommand):
+	def __call__(self, **kwargs):
+		pass
+	def is_visible(self):
+		return False
+
+def _is_parent_dir_entry_enabled(pane):
+	return _get_pane_info(pane).get('show_parent_dir_entry', False)
+
+def _toggle_parent_dir_entry(pane, value):
+	if value:
+		pane._remove_filter(_parent_dir_filter)
+	else:
+		pane._add_filter(_parent_dir_filter)
+	_get_pane_info(pane)['show_parent_dir_entry'] = value
+	save_json('Panes.json')
+	# Reload so the model picks up the change immediately:
+	pane.reload()
+
+def _parent_dir_filter(url):
+	return basename(url) != '..'
+
+def _get_parent_entries(location):
+	scheme, path = splitscheme(location)
+	parent_path = dirname(location)
+	_, parent = splitscheme(parent_path)
+	if not parent or parent_path == location:
+		return []
+	return ['..']
 
 class _OpenInPaneCommand(DirectoryPaneCommand):
 	def __call__(self):

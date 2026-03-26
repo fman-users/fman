@@ -55,7 +55,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 
 	def __init__(
 		self, fs, location, columns, sort_column=0, ascending=True,
-		num_rows_to_preload=0, filters=None
+		num_rows_to_preload=0, filters=None, prepend_entries_fn=None
 	):
 		column_headers = [column.display_name for column in columns]
 		super().__init__(column_headers, sort_column, ascending, filters)
@@ -63,6 +63,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 		self._location = location
 		self._columns = columns
 		self._num_rows_to_preload = num_rows_to_preload
+		self._prepend_entries_fn = prepend_entries_fn
 		self._files = {}
 		self._file_watcher = FileWatcher(fs, self)
 		self._worker = Worker()
@@ -74,10 +75,15 @@ class Model(SortFilterTableModel, DragAndDrop):
 	def _init(self, callback):
 		files = []
 		try:
-			file_names = iter(self._fs.iterdir(self._location))
+			entries = list(self._fs.iterdir(self._location))
 		except FileNotFoundError:
 			self.location_disappeared.emit(self._location)
 			return
+		if self._prepend_entries_fn:
+			extra = self._prepend_entries_fn(self._location)
+			if extra:
+				entries = extra + entries
+		file_names = iter(entries)
 		while not self._shutdown:
 			try:
 				file_name = next(file_names)
@@ -273,10 +279,15 @@ class Model(SortFilterTableModel, DragAndDrop):
 		self._fs.clear_cache(self._location)
 		files = []
 		try:
-			file_names = iter(self._fs.iterdir(self._location))
+			entries = list(self._fs.iterdir(self._location))
 		except FileNotFoundError:
 			self.location_disappeared.emit(self._location)
 			return
+		if self._prepend_entries_fn:
+			extra = self._prepend_entries_fn(self._location)
+			if extra:
+				entries = extra + entries
+		file_names = iter(entries)
 		while not self._shutdown:
 			try:
 				file_name = next(file_names)
