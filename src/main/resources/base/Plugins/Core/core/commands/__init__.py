@@ -1060,7 +1060,7 @@ def _toggle_hidden_files(pane, value):
 
 def _get_pane_info(pane):
 	settings = load_json('Panes.json', default=[])
-	default = {'show_hidden_files': False}
+	default = {'show_hidden_files': False, 'show_parent_dir_entry': False}
 	pane_index = pane.window.get_panes().index(pane)
 	for _ in range(pane_index - len(settings) + 1):
 		settings.append(default.copy())
@@ -1069,8 +1069,68 @@ def _get_pane_info(pane):
 def _hidden_file_filter(url):
 	if PLATFORM == 'Mac' and url == 'file:///Volumes':
 		return True
+	if basename(url) == '..':
+		return True
 	scheme, path = splitscheme(url)
 	return scheme != 'file://' or not is_hidden(path)
+
+class ToggleParentDirEntry(DirectoryPaneCommand):
+
+	aliases = ('Toggle parent directory entry',
+			   'Show / hide ".." parent directory entry')
+
+	def __call__(self):
+		enabled = not _is_parent_dir_entry_enabled(self.pane)
+		_get_pane_info(self.pane)['show_parent_dir_entry'] = enabled
+		save_json('Panes.json')
+		if enabled:
+			from threading import Thread
+			Thread(target=_inject_parent_dir_entry, args=(self.pane,),
+				   daemon=True).start()
+			show_status_message('Parent directory entry enabled.')
+		else:
+			# Reload to remove the ".." entry:
+			self.pane.reload()
+			show_status_message('Parent directory entry disabled.')
+
+class InitParentDirEntry(DirectoryPaneListener):
+	def on_path_changed(self):
+		if _is_parent_dir_entry_enabled(self.pane):
+			from threading import Thread
+			pane = self.pane
+			Thread(target=_inject_parent_dir_entry, args=(pane,),
+				   daemon=True).start()
+
+class ParentDirOpenListener(DirectoryPaneListener):
+	def on_command(self, command_name, args):
+		if command_name in ('open', 'open_directory'):
+			url = args.get('url', '')
+			if basename(url) == '..':
+				go_up(self.pane)
+				return 'noop', {}
+		return None
+
+class Noop(DirectoryPaneCommand):
+	def __call__(self, **kwargs):
+		pass
+	def is_visible(self):
+		return False
+
+def _is_parent_dir_entry_enabled(pane):
+	return _get_pane_info(pane).get('show_parent_dir_entry', False)
+
+def _inject_parent_dir_entry(pane):
+	current_url = pane.get_path()
+	parent_url = dirname(current_url)
+	# Don't show ".." at the root (dirname returns scheme only, e.g. "file://")
+	if parent_url == current_url or not splitscheme(parent_url)[1]:
+		return
+	parent_entry_url = join(current_url, '..')
+	try:
+		from fman.fs import notify_file_added
+		notify_file_added(parent_entry_url)
+	except Exception:
+		pass
 
 class _OpenInPaneCommand(DirectoryPaneCommand):
 	def __call__(self):
