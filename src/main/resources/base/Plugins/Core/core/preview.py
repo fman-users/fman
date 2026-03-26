@@ -96,7 +96,7 @@ class PreviewWidget(QWidget):
 			return
 
 		if os.path.isdir(path):
-			self._show_message('Directory')
+			self._show_directory_info(path)
 			return
 
 		ext = os.path.splitext(name)[1].lower()
@@ -174,6 +174,39 @@ class PreviewWidget(QWidget):
 					'{:,}'.format(size)
 				)
 			)
+
+	def _show_directory_info(self, path):
+		try:
+			entries = os.listdir(path)
+		except OSError as e:
+			self._show_message('Cannot read directory: %s' % e)
+			return
+		num_files = 0
+		num_dirs = 0
+		total_size = 0
+		for entry in entries:
+			entry_path = os.path.join(path, entry)
+			try:
+				if os.path.isdir(entry_path):
+					num_dirs += 1
+				else:
+					num_files += 1
+					total_size += os.path.getsize(entry_path)
+			except OSError:
+				num_files += 1
+		lines = ['Directory\n']
+		lines.append('{:,} files, {:,} folders'.format(num_files, num_dirs))
+		if total_size > 0:
+			if total_size < 1024:
+				size_str = '{:,} B'.format(total_size)
+			elif total_size < 1024 * 1024:
+				size_str = '{:,.1f} KB'.format(total_size / 1024)
+			elif total_size < 1024 * 1024 * 1024:
+				size_str = '{:,.1f} MB'.format(total_size / (1024 * 1024))
+			else:
+				size_str = '{:,.1f} GB'.format(total_size / (1024 * 1024 * 1024))
+			lines.append('Size (files only): %s' % size_str)
+		self._show_message('\n'.join(lines))
 
 	def _show_message(self, text):
 		self._current_pixmap = None
