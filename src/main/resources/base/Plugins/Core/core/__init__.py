@@ -99,7 +99,7 @@ class Modified(Column):
 		try:
 			timestamp = mtime.timestamp()
 		except OSError:
-			# This can occur in at least Python 3.6 on Windows. To reproduce:
+			# This can occur on Windows. To reproduce:
 			#     datetime.min.timestamp()
 			# This raises `OSError: [Errno 22] Invalid argument`.
 			return ''

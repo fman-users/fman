@@ -220,13 +220,7 @@ class LocalFileSystem(FileSystem):
 				return 'network://' + path[2:]
 		p = Path(path)
 		try:
-			try:
-				path = p.resolve(strict=True)
-			except TypeError:
-				# fman's "production Python version" is 3.6 but we want to be
-				# able to develop using 3.5 as well. So add this workaround for
-				# Python < 3.6:
-				path = p.resolve()
+			path = p.resolve(strict=True)
 		except FileNotFoundError:
 			if not p.exists():
 				raise

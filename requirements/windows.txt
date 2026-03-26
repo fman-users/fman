@@ -1,7 +1,7 @@
 -r base.txt
-PyQt5==5.15.4
+PyQt5==5.15.11
 # Note: Send2Trash 1.5.0 has no effect on Windows!
-Send2Trash==1.4.2
+Send2Trash==1.8.3
 adodbapi==2.6.0.7
-https://download.lfd.uci.edu/pythonlibs/w4tscw6k/pywinpty-0.5.7-cp39-cp39-win_amd64.whl
-pywin32==300
+pywinpty==2.0.14
+pywin32==308
