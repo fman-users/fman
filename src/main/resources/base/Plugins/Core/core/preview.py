@@ -1,10 +1,15 @@
 from fman.url import splitscheme, basename
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QFont
+from PyQt5.QtGui import QPixmap, QFont, QImage
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPlainTextEdit, \
 	QStackedWidget, QScrollArea, QSizePolicy
 
 import os
+
+try:
+	import fitz as _fitz
+except ImportError:
+	_fitz = None
 
 _TEXT_EXTENSIONS = {
 	'.txt', '.py', '.js', '.ts', '.jsx', '.tsx', '.json', '.xml', '.html',
@@ -103,6 +108,8 @@ class PreviewWidget(QWidget):
 
 		if ext in _IMAGE_EXTENSIONS:
 			self._show_image(path)
+		elif ext == '.pdf':
+			self._show_pdf(path)
 		elif ext in _TEXT_EXTENSIONS:
 			self._show_text(path)
 		else:
@@ -150,6 +157,36 @@ class PreviewWidget(QWidget):
 			available, Qt.KeepAspectRatio, Qt.SmoothTransformation
 		)
 		self._image_label.setPixmap(scaled)
+
+	def _show_pdf(self, path):
+		if _fitz is None:
+			self._show_message('PDF preview requires PyMuPDF.\n\npip install PyMuPDF')
+			return
+		try:
+			doc = _fitz.open(path)
+			if len(doc) == 0:
+				self._show_message('Empty PDF')
+				doc.close()
+				return
+			page = doc[0]
+			# Render at 150 DPI for good quality
+			mat = _fitz.Matrix(150 / 72, 150 / 72)
+			pix = page.get_pixmap(matrix=mat)
+			# Convert to QImage then QPixmap
+			if pix.alpha:
+				fmt = QImage.Format_RGBA8888
+			else:
+				fmt = QImage.Format_RGB888
+			qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
+			pixmap = QPixmap.fromImage(qimg)
+			page_info = '%d pages' % len(doc) if len(doc) > 1 else '1 page'
+			self._header.setText('%s (%s)' % (self._header.text(), page_info))
+			doc.close()
+			self._current_pixmap = pixmap
+			self._scale_image()
+			self._stack.setCurrentIndex(1)
+		except Exception as e:
+			self._show_message('Cannot render PDF: %s' % e)
 
 	def _show_by_sniffing(self, path):
 		try:
