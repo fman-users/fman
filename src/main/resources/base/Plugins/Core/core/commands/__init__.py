@@ -1132,6 +1132,106 @@ def _inject_parent_dir_entry(pane):
 	except Exception:
 		pass
 
+class TogglePreview(DirectoryPaneCommand):
+
+	aliases = ('Toggle preview', 'Preview file', 'View file')
+
+	_active_previews = {}
+
+	def __call__(self):
+		if self.pane in self._active_previews:
+			_deactivate_preview(self.pane)
+		else:
+			_activate_preview(self.pane)
+	def is_visible(self):
+		return len(self.pane.window.get_panes()) >= 2
+
+class ExitPreview(DirectoryPaneCommand):
+	def __call__(self):
+		if self.pane in TogglePreview._active_previews:
+			_deactivate_preview(self.pane)
+	def is_visible(self):
+		return self.pane in TogglePreview._active_previews
+
+class PreviewModeListener(DirectoryPaneListener):
+	def on_path_changed(self):
+		if self.pane in TogglePreview._active_previews:
+			file_url = self.pane.get_file_under_cursor()
+			state = TogglePreview._active_previews[self.pane]
+			state['preview_widget'].show_preview(file_url)
+	def on_command(self, command_name, args):
+		if self.pane in TogglePreview._active_previews:
+			if command_name == 'switch_panes':
+				_deactivate_preview(self.pane)
+		return None
+
+def _activate_preview(pane):
+	from core.preview import PreviewWidget
+	from fman.impl.util.qt.thread import run_in_main_thread
+	panes = pane.window.get_panes()
+	if len(panes) < 2:
+		return
+	this_index = panes.index(pane)
+	other_index = 1 - this_index
+	other_pane = panes[other_index]
+	target_widget = other_pane._widget
+	file_view = pane._widget._file_view
+	file_url = pane.get_file_under_cursor()
+
+	@run_in_main_thread
+	def _do_activate():
+		splitter = target_widget.parentWidget()
+		splitter_index = splitter.indexOf(target_widget)
+		sizes = splitter.sizes()
+
+		preview = PreviewWidget()
+		target_widget.hide()
+		splitter.insertWidget(splitter_index, preview)
+		splitter.setSizes(sizes)
+
+		def on_cursor_changed(current, _previous):
+			try:
+				url = file_view.model().url(current)
+			except (ValueError, RuntimeError):
+				url = None
+			preview.show_preview(url)
+
+		file_view.selectionModel().currentRowChanged.connect(on_cursor_changed)
+
+		TogglePreview._active_previews[pane] = {
+			'preview_widget': preview,
+			'target_widget': target_widget,
+			'splitter_sizes': sizes,
+			'on_cursor_changed': on_cursor_changed,
+			'file_view': file_view,
+		}
+
+		preview.show_preview(file_url)
+
+	_do_activate()
+
+def _deactivate_preview(pane):
+	from fman.impl.util.qt.thread import run_in_main_thread
+	state = TogglePreview._active_previews.pop(pane, None)
+	if not state:
+		return
+
+	@run_in_main_thread
+	def _do_deactivate():
+		file_view = state['file_view']
+		try:
+			file_view.selectionModel().currentRowChanged.disconnect(
+				state['on_cursor_changed']
+			)
+		except (TypeError, RuntimeError):
+			pass
+		preview = state['preview_widget']
+		preview.setParent(None)
+		preview.deleteLater()
+		state['target_widget'].show()
+
+	_do_deactivate()
+
 class _OpenInPaneCommand(DirectoryPaneCommand):
 	def __call__(self):
 		panes = self.pane.window.get_panes()

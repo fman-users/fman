@@ -38,5 +38,7 @@
 	{ "keys": ["Shift+Delete"], "command": "delete_permanently" },
 	{ "keys": ["Alt+F1"], "command": "show_volumes", "args": {"pane_index": 0} },
 	{ "keys": ["Alt+F2"], "command": "show_volumes", "args": {"pane_index": 1} },
-	{ "keys": ["Num+Insert"], "command": "move_cursor_down", "args": {"toggle_selection": true} }
+	{ "keys": ["Num+Insert"], "command": "move_cursor_down", "args": {"toggle_selection": true} },
+	{ "keys": ["F3"], "command": "toggle_preview" },
+	{ "keys": ["Escape"], "command": "exit_preview" }
 ]
