@@ -1187,7 +1187,12 @@ def _activate_preview(pane):
 		preview = PreviewWidget()
 		target_widget.hide()
 		splitter.insertWidget(splitter_index, preview)
-		splitter.setSizes(sizes)
+		# Build sizes for all 3 widgets: preview gets the target's size,
+		# hidden target gets 0, source pane keeps its size.
+		new_sizes = list(sizes)
+		new_sizes.insert(splitter_index, sizes[splitter_index])
+		new_sizes[splitter_index + 1] = 0
+		splitter.setSizes(new_sizes)
 
 		def on_cursor_changed(current, _previous):
 			try:
