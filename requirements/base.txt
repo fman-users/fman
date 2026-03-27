@@ -6,3 +6,4 @@ tinycss==0.4
 boto3==1.35.99
 requests==2.32.3
 PyMuPDF==1.27.2.2
+Pillow==11.2.1

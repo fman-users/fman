@@ -11,6 +11,11 @@ try:
 except ImportError:
 	_fitz = None
 
+try:
+	from PIL import Image as _PIL_Image
+except ImportError:
+	_PIL_Image = None
+
 _TEXT_EXTENSIONS = {
 	'.txt', '.py', '.js', '.ts', '.jsx', '.tsx', '.json', '.xml', '.html',
 	'.htm', '.css', '.scss', '.less', '.md', '.markdown', '.yaml', '.yml',
@@ -129,6 +134,8 @@ class PreviewWidget(QWidget):
 
 		if ext in _IMAGE_EXTENSIONS:
 			self._show_image(path, ext)
+		elif ext == '.avif':
+			self._show_pillow_image(path)
 		elif ext == '.pdf':
 			self._show_pdf(path)
 		elif ext in _TEXT_EXTENSIONS:
@@ -161,6 +168,29 @@ class PreviewWidget(QWidget):
 			self._stack.setCurrentIndex(0)
 		except (OSError, UnicodeDecodeError) as e:
 			self._show_message('Cannot read file: %s' % e)
+
+	def _show_pillow_image(self, path):
+		if _PIL_Image is None:
+			self._show_message('AVIF preview requires Pillow.\n\npip install Pillow')
+			return
+		try:
+			img = _PIL_Image.open(path)
+			img = img.convert('RGBA')
+			data = img.tobytes('raw', 'RGBA')
+			qimg = QImage(data, img.width, img.height, QImage.Format_RGBA8888)
+			pixmap = QPixmap.fromImage(qimg)
+			if pixmap.isNull():
+				self._show_message('Cannot load image')
+				return
+			size = os.path.getsize(path)
+			self._image_info.setText(
+				'%d x %d px  |  %s' % (img.width, img.height, _format_size(size))
+			)
+			self._current_pixmap = pixmap
+			self._scale_image()
+			self._stack.setCurrentIndex(1)
+		except Exception as e:
+			self._show_message('Cannot load image: %s' % e)
 
 	def _show_image(self, path, ext=None):
 		pixmap = QPixmap(path)
