@@ -32,6 +32,16 @@ _IMAGE_EXTENSIONS = {
 _MAX_TEXT_SIZE = 1024 * 1024  # 1 MB
 _SNIFF_SIZE = 8192
 
+def _format_size(size):
+	if size < 1024:
+		return '{:,} B'.format(size)
+	elif size < 1024 * 1024:
+		return '{:,.1f} KB'.format(size / 1024)
+	elif size < 1024 * 1024 * 1024:
+		return '{:,.1f} MB'.format(size / (1024 * 1024))
+	else:
+		return '{:,.1f} GB'.format(size / (1024 * 1024 * 1024))
+
 class PreviewWidget(QWidget):
 	def __init__(self, parent=None):
 		super().__init__(parent)
@@ -65,7 +75,16 @@ class PreviewWidget(QWidget):
 		self._text_view.setFont(font)
 		self._stack.addWidget(self._text_view)
 
-		# Page 1: Image preview
+		# Page 1: Image preview with info bar
+		image_page = QWidget()
+		image_layout = QVBoxLayout()
+		image_layout.setContentsMargins(0, 0, 0, 0)
+		image_layout.setSpacing(0)
+		self._image_info = QLabel()
+		self._image_info.setStyleSheet(
+			'QLabel { padding: 2px 8px; color: gray; font-size: 11px; }'
+		)
+		image_layout.addWidget(self._image_info)
 		self._image_scroll = QScrollArea()
 		self._image_scroll.setWidgetResizable(True)
 		self._image_scroll.setAlignment(Qt.AlignCenter)
@@ -75,7 +94,9 @@ class PreviewWidget(QWidget):
 			QSizePolicy.Ignored, QSizePolicy.Ignored
 		)
 		self._image_scroll.setWidget(self._image_label)
-		self._stack.addWidget(self._image_scroll)
+		image_layout.addWidget(self._image_scroll)
+		image_page.setLayout(image_layout)
+		self._stack.addWidget(image_page)
 
 		# Page 2: Fallback message
 		self._fallback = QLabel()
@@ -107,7 +128,7 @@ class PreviewWidget(QWidget):
 		ext = os.path.splitext(name)[1].lower()
 
 		if ext in _IMAGE_EXTENSIONS:
-			self._show_image(path)
+			self._show_image(path, ext)
 		elif ext == '.pdf':
 			self._show_pdf(path)
 		elif ext in _TEXT_EXTENSIONS:
@@ -119,6 +140,7 @@ class PreviewWidget(QWidget):
 		self._header.setText('')
 		self._text_view.clear()
 		self._image_label.clear()
+		self._image_info.setText('')
 		self._current_pixmap = None
 		self._fallback.setText('')
 		self._stack.setCurrentIndex(2)
@@ -140,11 +162,19 @@ class PreviewWidget(QWidget):
 		except (OSError, UnicodeDecodeError) as e:
 			self._show_message('Cannot read file: %s' % e)
 
-	def _show_image(self, path):
+	def _show_image(self, path, ext=None):
 		pixmap = QPixmap(path)
 		if pixmap.isNull():
 			self._show_message('Cannot load image')
 			return
+		w, h = pixmap.width(), pixmap.height()
+		if ext == '.svg':
+			self._image_info.setText('SVG canvas: %d x %d' % (w, h))
+		else:
+			size = os.path.getsize(path)
+			self._image_info.setText(
+				'%d x %d px  |  %s' % (w, h, _format_size(size))
+			)
 		self._current_pixmap = pixmap
 		self._scale_image()
 		self._stack.setCurrentIndex(1)
@@ -179,8 +209,13 @@ class PreviewWidget(QWidget):
 				fmt = QImage.Format_RGB888
 			qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
 			pixmap = QPixmap.fromImage(qimg)
-			page_info = '%d pages' % len(doc) if len(doc) > 1 else '1 page'
+			num_pages = len(doc)
+			page_info = '%d pages' % num_pages if num_pages > 1 else '1 page'
 			self._header.setText('%s (%s)' % (self._header.text(), page_info))
+			size = os.path.getsize(path)
+			self._image_info.setText(
+				'%s  |  %d x %d px' % (_format_size(size), pix.width, pix.height)
+			)
 			doc.close()
 			self._current_pixmap = pixmap
 			self._scale_image()
@@ -234,15 +269,7 @@ class PreviewWidget(QWidget):
 		lines = ['Directory\n']
 		lines.append('{:,} files, {:,} folders'.format(num_files, num_dirs))
 		if total_size > 0:
-			if total_size < 1024:
-				size_str = '{:,} B'.format(total_size)
-			elif total_size < 1024 * 1024:
-				size_str = '{:,.1f} KB'.format(total_size / 1024)
-			elif total_size < 1024 * 1024 * 1024:
-				size_str = '{:,.1f} MB'.format(total_size / (1024 * 1024))
-			else:
-				size_str = '{:,.1f} GB'.format(total_size / (1024 * 1024 * 1024))
-			lines.append('Size (files only): %s' % size_str)
+			lines.append('Size (files only): %s' % _format_size(total_size))
 		self._show_message('\n'.join(lines))
 
 	def _show_message(self, text):
