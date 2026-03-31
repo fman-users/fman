@@ -50,6 +50,10 @@ def freeze():
 		path('${core_plugin_in_freeze_dir}/bin/mac/7za'),
 		path('${freeze_dir}/Contents/MacOS')
 	)
+	# Ad-hoc sign so macOS shows TCC permission dialogs for folder access.
+	# Without this, unsigned apps are silently denied access to Downloads etc.
+	run(['codesign', '--force', '--deep', '--sign', '-', path('${freeze_dir}')],
+		check=True)
 
 def _strip_unused_from_bundle():
 	frameworks = path('${freeze_dir}/Contents/Frameworks')
@@ -145,10 +149,15 @@ def _notarize(file_path, query_interval_secs=10):
 		raise RuntimeError('Unexpected notarization status: %r' % status)
 
 def _run_altool(args):
+	user = os.environ.get(
+		'FMAN_APPLE_DEVELOPER_USER', SETTINGS.get('apple_developer_user', '')
+	)
+	pw = os.environ.get(
+		'FMAN_APPLE_DEVELOPER_APP_PW', SETTINGS.get('apple_developer_app_pw', '')
+	)
 	all_args = [
 		'xcrun', 'altool', '--output-format', 'xml',
-		'-u', SETTINGS['apple_developer_user'],
-		'-p', SETTINGS['apple_developer_app_pw']
+		'-u', user, '-p', pw
 	] + args
 	process = run(all_args, stdout=PIPE, stderr=PIPE, check=True)
 	return plistlib.loads(process.stdout)
