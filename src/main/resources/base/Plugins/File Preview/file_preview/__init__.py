@@ -20,8 +20,8 @@ _TEXT_EXTENSIONS = {
 	'.ps1', '.log', '.csv', '.tsv', '.rst', '.java', '.c', '.h', '.cpp',
 	'.hpp', '.cs', '.rs', '.go', '.rb', '.php', '.pl', '.lua', '.sql',
 	'.r', '.m', '.swift', '.kt', '.scala', '.hs', '.ex', '.exs', '.erl',
-	'.clj', '.lisp', '.vim', '.el', '.cmake', '.makefile', '.mk',
-	'.dockerfile', '.gitignore', '.gitattributes', '.editorconfig',
+	'.clj', '.lisp', '.vim', '.el', '.cmake', '.mk',
+	'.gitignore', '.gitattributes', '.editorconfig',
 	'.env', '.conf', '.properties', '.gradle', '.pom', '.sbt',
 	'.cabal', '.lock', '.patch', '.diff',
 }
@@ -33,6 +33,7 @@ _IMAGE_EXTENSIONS = {
 
 _MAX_TEXT_SIZE = 1024 * 1024
 _SNIFF_SIZE = 8192
+_MAX_DIR_ENTRIES = 10000
 
 def _format_size(size):
 	if size < 1024:
@@ -44,8 +45,20 @@ def _format_size(size):
 	else:
 		return '{:,.1f} GB'.format(size / (1024 * 1024 * 1024))
 
+def _looks_binary(sample):
+	return b'\x00' in sample
+
 
 class PreviewWidget(QWidget):
+
+	# Registry of extension -> handler for plugin extensibility.
+	# Handlers are called as handler(self, path) where self is PreviewWidget.
+	_preview_handlers = {}
+
+	@classmethod
+	def register_handler(cls, ext, handler):
+		cls._preview_handlers[ext] = handler
+
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self._current_pixmap = None
@@ -125,6 +138,11 @@ class PreviewWidget(QWidget):
 			self._show_directory_info(path)
 			return
 		ext = os.path.splitext(name)[1].lower()
+		# Check registered handlers first (PDF, etc.)
+		handler = self._preview_handlers.get(ext)
+		if handler:
+			handler(self, path)
+			return
 		if ext in _IMAGE_EXTENSIONS:
 			self._show_image(path, ext)
 		elif ext == '.avif':
@@ -165,17 +183,19 @@ class PreviewWidget(QWidget):
 			self._show_message('AVIF preview requires Pillow.\n\npip install Pillow')
 			return
 		try:
-			img = _PIL_Image.open(path)
-			img = img.convert('RGBA')
-			data = img.tobytes('raw', 'RGBA')
-			qimg = QImage(data, img.width, img.height, QImage.Format_RGBA8888)
+			with _PIL_Image.open(path) as img:
+				w, h = img.width, img.height
+				rgba = img.convert('RGBA')
+				data = rgba.tobytes('raw', 'RGBA')
+			# data is a bytes object that outlives the with block
+			qimg = QImage(data, w, h, QImage.Format_RGBA8888).copy()
 			pixmap = QPixmap.fromImage(qimg)
 			if pixmap.isNull():
 				self._show_message('Cannot load image')
 				return
 			size = os.path.getsize(path)
 			self._image_info.setText(
-				'%d x %d px  |  %s' % (img.width, img.height, _format_size(size))
+				'%d x %d px  |  %s' % (w, h, _format_size(size))
 			)
 			self._current_pixmap = pixmap
 			self._scale_image()
@@ -192,7 +212,10 @@ class PreviewWidget(QWidget):
 		if ext == '.svg':
 			self._image_info.setText('SVG canvas: %d x %d' % (w, h))
 		else:
-			size = os.path.getsize(path)
+			try:
+				size = os.path.getsize(path)
+			except OSError:
+				size = 0
 			self._image_info.setText(
 				'%d x %d px  |  %s' % (w, h, _format_size(size))
 			)
@@ -213,20 +236,30 @@ class PreviewWidget(QWidget):
 		try:
 			with open(path, 'rb') as f:
 				sample = f.read(_SNIFF_SIZE)
+				try:
+					file_size = os.fstat(f.fileno()).st_size
+				except OSError:
+					file_size = 0
 		except OSError as e:
 			self._show_message('Cannot read file: %s' % e)
 			return
 		if not sample:
 			self._show_text(path)
 			return
+		if _looks_binary(sample):
+			self._show_message(
+				'Binary file\n\n%s\n%s' % (
+					os.path.basename(path), _format_size(file_size)
+				)
+			)
+			return
 		try:
 			sample.decode('utf-8')
 			self._show_text(path)
 		except UnicodeDecodeError:
-			size = os.path.getsize(path)
 			self._show_message(
-				'Binary file\n\n%s\n%s bytes' % (
-					os.path.basename(path), '{:,}'.format(size)
+				'Binary file\n\n%s\n%s' % (
+					os.path.basename(path), _format_size(file_size)
 				)
 			)
 
@@ -239,7 +272,9 @@ class PreviewWidget(QWidget):
 		num_files = 0
 		num_dirs = 0
 		total_size = 0
-		for entry in entries:
+		for i, entry in enumerate(entries):
+			if i >= _MAX_DIR_ENTRIES:
+				break
 			entry_path = os.path.join(path, entry)
 			try:
 				if os.path.isdir(entry_path):
@@ -250,7 +285,10 @@ class PreviewWidget(QWidget):
 			except OSError:
 				num_files += 1
 		lines = ['Directory\n']
-		lines.append('{:,} files, {:,} folders'.format(num_files, num_dirs))
+		count_str = '{:,} files, {:,} folders'.format(num_files, num_dirs)
+		if len(entries) > _MAX_DIR_ENTRIES:
+			count_str += ' (first {:,} entries)'.format(_MAX_DIR_ENTRIES)
+		lines.append(count_str)
 		if total_size > 0:
 			lines.append('Size (files only): %s' % _format_size(total_size))
 		self._show_message('\n'.join(lines))
@@ -264,6 +302,7 @@ class PreviewWidget(QWidget):
 # --- Commands and Listeners ---
 
 _active_previews = {}
+_preview_in_transition = set()
 
 
 class TogglePreview(DirectoryPaneCommand):
@@ -271,6 +310,8 @@ class TogglePreview(DirectoryPaneCommand):
 	aliases = ('Toggle preview', 'Preview file', 'View file')
 
 	def __call__(self):
+		if self.pane in _preview_in_transition:
+			return
 		if self.pane in _active_previews:
 			_deactivate_preview(self.pane)
 		else:
@@ -280,6 +321,9 @@ class TogglePreview(DirectoryPaneCommand):
 
 
 class ExitPreview(DirectoryPaneCommand):
+
+	aliases = ('Exit preview', 'Close preview')
+
 	def __call__(self):
 		if self.pane in _active_previews:
 			_deactivate_preview(self.pane)
@@ -295,7 +339,7 @@ class PreviewModeListener(DirectoryPaneListener):
 			state['preview_widget'].show_preview(file_url)
 	def on_command(self, command_name, args):
 		if self.pane in _active_previews:
-			if command_name == 'switch_panes':
+			if command_name in ('switch_panes', 'go_to'):
 				_deactivate_preview(self.pane)
 		return None
 
@@ -304,6 +348,7 @@ def _activate_preview(pane):
 	panes = pane.window.get_panes()
 	if len(panes) < 2:
 		return
+	_preview_in_transition.add(pane)
 	this_index = panes.index(pane)
 	other_index = 1 - this_index
 	other_pane = panes[other_index]
@@ -341,6 +386,7 @@ def _activate_preview(pane):
 			'on_cursor_changed': on_cursor_changed,
 			'file_view': file_view,
 		}
+		_preview_in_transition.discard(pane)
 
 		preview.show_preview(file_url)
 
@@ -351,6 +397,7 @@ def _deactivate_preview(pane):
 	state = _active_previews.pop(pane, None)
 	if not state:
 		return
+	_preview_in_transition.add(pane)
 
 	@run_in_main_thread
 	def _do_deactivate():
@@ -371,5 +418,6 @@ def _deactivate_preview(pane):
 		preview.deleteLater()
 		if splitter and sizes:
 			splitter.setSizes(sizes)
+		_preview_in_transition.discard(pane)
 
 	_do_deactivate()
