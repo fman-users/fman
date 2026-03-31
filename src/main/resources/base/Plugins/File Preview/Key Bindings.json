@@ -1,0 +1,5 @@
+[
+	{ "keys": ["F3"], "command": "toggle_preview" },
+	{ "keys": ["Shift+F3"], "command": "toggle_preview" },
+	{ "keys": ["Escape"], "command": "exit_preview" }
+]

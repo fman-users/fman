@@ -1,15 +1,12 @@
+from fman import DirectoryPaneCommand, DirectoryPaneListener
 from fman.url import splitscheme, basename
+from fman.impl.util.qt.thread import run_in_main_thread
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QFont, QImage
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPlainTextEdit, \
 	QStackedWidget, QScrollArea, QSizePolicy
 
 import os
-
-try:
-	import fitz as _fitz
-except ImportError:
-	_fitz = None
 
 try:
 	from PIL import Image as _PIL_Image
@@ -34,7 +31,7 @@ _IMAGE_EXTENSIONS = {
 	'.tif', '.tiff',
 }
 
-_MAX_TEXT_SIZE = 1024 * 1024  # 1 MB
+_MAX_TEXT_SIZE = 1024 * 1024
 _SNIFF_SIZE = 8192
 
 def _format_size(size):
@@ -46,6 +43,7 @@ def _format_size(size):
 		return '{:,.1f} MB'.format(size / (1024 * 1024))
 	else:
 		return '{:,.1f} GB'.format(size / (1024 * 1024 * 1024))
+
 
 class PreviewWidget(QWidget):
 	def __init__(self, parent=None):
@@ -117,27 +115,20 @@ class PreviewWidget(QWidget):
 		if file_url is None:
 			self._show_message('No file selected')
 			return
-
 		name = basename(file_url)
 		self._header.setText(name)
-
 		scheme, path = splitscheme(file_url)
 		if scheme != 'file://':
 			self._show_message('Preview not available for %s' % scheme)
 			return
-
 		if os.path.isdir(path):
 			self._show_directory_info(path)
 			return
-
 		ext = os.path.splitext(name)[1].lower()
-
 		if ext in _IMAGE_EXTENSIONS:
 			self._show_image(path, ext)
 		elif ext == '.avif':
 			self._show_pillow_image(path)
-		elif ext == '.pdf':
-			self._show_pdf(path)
 		elif ext in _TEXT_EXTENSIONS:
 			self._show_text(path)
 		else:
@@ -218,41 +209,6 @@ class PreviewWidget(QWidget):
 		)
 		self._image_label.setPixmap(scaled)
 
-	def _show_pdf(self, path):
-		if _fitz is None:
-			self._show_message('PDF preview requires PyMuPDF.\n\npip install PyMuPDF')
-			return
-		try:
-			doc = _fitz.open(path)
-			if len(doc) == 0:
-				self._show_message('Empty PDF')
-				doc.close()
-				return
-			page = doc[0]
-			# Render at 150 DPI for good quality
-			mat = _fitz.Matrix(150 / 72, 150 / 72)
-			pix = page.get_pixmap(matrix=mat)
-			# Convert to QImage then QPixmap
-			if pix.alpha:
-				fmt = QImage.Format_RGBA8888
-			else:
-				fmt = QImage.Format_RGB888
-			qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, fmt)
-			pixmap = QPixmap.fromImage(qimg)
-			num_pages = len(doc)
-			page_info = '%d pages' % num_pages if num_pages > 1 else '1 page'
-			self._header.setText('%s (%s)' % (self._header.text(), page_info))
-			size = os.path.getsize(path)
-			self._image_info.setText(
-				'%s  |  %d x %d px' % (_format_size(size), pix.width, pix.height)
-			)
-			doc.close()
-			self._current_pixmap = pixmap
-			self._scale_image()
-			self._stack.setCurrentIndex(1)
-		except Exception as e:
-			self._show_message('Cannot render PDF: %s' % e)
-
 	def _show_by_sniffing(self, path):
 		try:
 			with open(path, 'rb') as f:
@@ -260,11 +216,9 @@ class PreviewWidget(QWidget):
 		except OSError as e:
 			self._show_message('Cannot read file: %s' % e)
 			return
-
 		if not sample:
 			self._show_text(path)
 			return
-
 		try:
 			sample.decode('utf-8')
 			self._show_text(path)
@@ -272,8 +226,7 @@ class PreviewWidget(QWidget):
 			size = os.path.getsize(path)
 			self._show_message(
 				'Binary file\n\n%s\n%s bytes' % (
-					os.path.basename(path),
-					'{:,}'.format(size)
+					os.path.basename(path), '{:,}'.format(size)
 				)
 			)
 
@@ -306,3 +259,117 @@ class PreviewWidget(QWidget):
 		self._current_pixmap = None
 		self._fallback.setText(text)
 		self._stack.setCurrentIndex(2)
+
+
+# --- Commands and Listeners ---
+
+_active_previews = {}
+
+
+class TogglePreview(DirectoryPaneCommand):
+
+	aliases = ('Toggle preview', 'Preview file', 'View file')
+
+	def __call__(self):
+		if self.pane in _active_previews:
+			_deactivate_preview(self.pane)
+		else:
+			_activate_preview(self.pane)
+	def is_visible(self):
+		return len(self.pane.window.get_panes()) >= 2
+
+
+class ExitPreview(DirectoryPaneCommand):
+	def __call__(self):
+		if self.pane in _active_previews:
+			_deactivate_preview(self.pane)
+	def is_visible(self):
+		return self.pane in _active_previews
+
+
+class PreviewModeListener(DirectoryPaneListener):
+	def on_path_changed(self):
+		if self.pane in _active_previews:
+			file_url = self.pane.get_file_under_cursor()
+			state = _active_previews[self.pane]
+			state['preview_widget'].show_preview(file_url)
+	def on_command(self, command_name, args):
+		if self.pane in _active_previews:
+			if command_name == 'switch_panes':
+				_deactivate_preview(self.pane)
+		return None
+
+
+def _activate_preview(pane):
+	panes = pane.window.get_panes()
+	if len(panes) < 2:
+		return
+	this_index = panes.index(pane)
+	other_index = 1 - this_index
+	other_pane = panes[other_index]
+	target_widget = other_pane._widget
+	file_view = pane._widget._file_view
+	file_url = pane.get_file_under_cursor()
+
+	@run_in_main_thread
+	def _do_activate():
+		splitter = target_widget.parentWidget()
+		splitter_index = splitter.indexOf(target_widget)
+		sizes = splitter.sizes()
+
+		preview = PreviewWidget()
+		target_widget.hide()
+		splitter.insertWidget(splitter_index, preview)
+		new_sizes = list(sizes)
+		new_sizes.insert(splitter_index, sizes[splitter_index])
+		new_sizes[splitter_index + 1] = 0
+		splitter.setSizes(new_sizes)
+
+		def on_cursor_changed(current, _previous):
+			try:
+				url = file_view.model().url(current)
+			except (ValueError, RuntimeError):
+				url = None
+			preview.show_preview(url)
+
+		file_view.selectionModel().currentRowChanged.connect(on_cursor_changed)
+
+		_active_previews[pane] = {
+			'preview_widget': preview,
+			'target_widget': target_widget,
+			'splitter_sizes': sizes,
+			'on_cursor_changed': on_cursor_changed,
+			'file_view': file_view,
+		}
+
+		preview.show_preview(file_url)
+
+	_do_activate()
+
+
+def _deactivate_preview(pane):
+	state = _active_previews.pop(pane, None)
+	if not state:
+		return
+
+	@run_in_main_thread
+	def _do_deactivate():
+		file_view = state['file_view']
+		try:
+			file_view.selectionModel().currentRowChanged.disconnect(
+				state['on_cursor_changed']
+			)
+		except (TypeError, RuntimeError):
+			pass
+		target_widget = state['target_widget']
+		preview = state['preview_widget']
+		splitter = preview.parentWidget()
+		sizes = state['splitter_sizes']
+		preview.hide()
+		target_widget.show()
+		preview.setParent(None)
+		preview.deleteLater()
+		if splitter and sizes:
+			splitter.setSizes(sizes)
+
+	_do_deactivate()

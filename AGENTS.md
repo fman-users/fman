@@ -69,6 +69,66 @@ python build.py clean && python build.py freeze
 
 The freeze process: PyInstaller bundles Python + deps -> platform cleanup strips unused Qt/boto3 -> ad-hoc codesign for TCC compliance.
 
+## Plugin system
+
+### How plugins work
+
+Plugins are directories containing a Python package + optional JSON/CSS/TTF files. They are auto-discovered from three locations (load order):
+
+1. **Shipped**: `src/main/resources/base/Plugins/` (Core plugin)
+2. **Third-party**: `DATA_DIRECTORY/Plugins/Third-party/`
+3. **User**: `DATA_DIRECTORY/Plugins/User/`
+
+Where `DATA_DIRECTORY` is `~/Library/Application Support/fman` (Mac), `%APPDATA%/fman` (Windows), `~/.config/fman` (Linux).
+
+### Plugin directory structure
+
+```
+My Plugin/
+├── my_plugin/
+│   └── __init__.py           # Python classes (auto-discovered)
+├── Key Bindings.json         # Optional: shortcut definitions
+├── Key Bindings (Mac).json   # Optional: platform-specific overrides
+├── Theme.css                 # Optional: QSS styling
+└── *.ttf                     # Optional: font files
+```
+
+### Class auto-discovery
+
+Any class in `__init__.py` inheriting from these base classes is auto-registered:
+
+| Base class | Registration | Instantiation |
+|-----------|-------------|---------------|
+| `DirectoryPaneCommand` | Per-pane command registry | Lazy, one per pane |
+| `DirectoryPaneListener` | Per-pane listener list | On pane creation |
+| `ApplicationCommand` | App command registry | Singleton |
+| `FileSystem` | MotherFileSystem by `scheme` | On load |
+| `Column` | MotherFileSystem by qualified name | On load |
+
+Class name → command name: `MyCommand` → `my_command` (CamelCase to snake_case).
+
+### Key Bindings.json format
+
+```json
+[
+  { "keys": ["F3"], "command": "my_command" },
+  { "keys": ["Cmd+Shift+X"], "command": "my_command", "args": {"flag": true} }
+]
+```
+
+### Installing a third-party plugin
+
+Copy the plugin directory to `DATA_DIRECTORY/Plugins/Third-party/`:
+```bash
+cp -r "My Plugin" "~/Library/Application Support/fman/Plugins/Third-party/"
+```
+
+### Plugin lifecycle
+
+- `load()`: sys.path extended, packages imported, classes registered, CSS/fonts loaded
+- `unload()`: All registrations reversed in LIFO order, sys.path restored
+- Error handling: Plugin errors are caught and reported without crashing fman
+
 ## Common tasks
 
 ### Adding a new command
