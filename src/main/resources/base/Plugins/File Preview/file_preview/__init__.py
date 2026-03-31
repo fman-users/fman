@@ -1,5 +1,5 @@
 from fman import DirectoryPaneCommand, DirectoryPaneListener
-from fman.url import splitscheme, basename
+from fman.url import splitscheme, basename, as_human_readable
 from fman.impl.util.qt.thread import run_in_main_thread
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QFont, QImage
@@ -51,8 +51,6 @@ def _looks_binary(sample):
 
 class PreviewWidget(QWidget):
 
-	# Registry of extension -> handler for plugin extensibility.
-	# Handlers are called as handler(self, path) where self is PreviewWidget.
 	_preview_handlers = {}
 
 	@classmethod
@@ -62,6 +60,7 @@ class PreviewWidget(QWidget):
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self._current_pixmap = None
+		self._last_url = None
 		self._init_ui()
 
 	def _init_ui(self):
@@ -80,7 +79,6 @@ class PreviewWidget(QWidget):
 
 		self._stack = QStackedWidget()
 
-		# Page 0: Text preview
 		self._text_view = QPlainTextEdit()
 		self._text_view.setReadOnly(True)
 		self._text_view.setLineWrapMode(QPlainTextEdit.NoWrap)
@@ -91,7 +89,6 @@ class PreviewWidget(QWidget):
 		self._text_view.setFont(font)
 		self._stack.addWidget(self._text_view)
 
-		# Page 1: Image preview with info bar
 		image_page = QWidget()
 		image_layout = QVBoxLayout()
 		image_layout.setContentsMargins(0, 0, 0, 0)
@@ -114,7 +111,6 @@ class PreviewWidget(QWidget):
 		image_page.setLayout(image_layout)
 		self._stack.addWidget(image_page)
 
-		# Page 2: Fallback message
 		self._fallback = QLabel()
 		self._fallback.setAlignment(Qt.AlignCenter)
 		self._fallback.setWordWrap(True)
@@ -125,20 +121,23 @@ class PreviewWidget(QWidget):
 		self.setLayout(layout)
 
 	def show_preview(self, file_url):
+		if file_url == self._last_url:
+			return
+		self._last_url = file_url
 		if file_url is None:
 			self._show_message('No file selected')
 			return
 		name = basename(file_url)
 		self._header.setText(name)
-		scheme, path = splitscheme(file_url)
+		scheme, _ = splitscheme(file_url)
 		if scheme != 'file://':
 			self._show_message('Preview not available for %s' % scheme)
 			return
+		path = as_human_readable(file_url)
 		if os.path.isdir(path):
 			self._show_directory_info(path)
 			return
 		ext = os.path.splitext(name)[1].lower()
-		# Check registered handlers first (PDF, etc.)
 		handler = self._preview_handlers.get(ext)
 		if handler:
 			handler(self, path)
@@ -152,12 +151,20 @@ class PreviewWidget(QWidget):
 		else:
 			self._show_by_sniffing(path)
 
+	def show_image_pixmap(self, pixmap, info_text):
+		"""Public API for handler plugins to display a pixmap with info."""
+		self._current_pixmap = pixmap
+		self._image_info.setText(info_text)
+		self._scale_image()
+		self._stack.setCurrentIndex(1)
+
 	def clear(self):
 		self._header.setText('')
 		self._text_view.clear()
 		self._image_label.clear()
 		self._image_info.setText('')
 		self._current_pixmap = None
+		self._last_url = None
 		self._fallback.setText('')
 		self._stack.setCurrentIndex(2)
 
@@ -185,21 +192,17 @@ class PreviewWidget(QWidget):
 		try:
 			with _PIL_Image.open(path) as img:
 				w, h = img.width, img.height
+				file_size = os.fstat(img.fp.fileno()).st_size
 				rgba = img.convert('RGBA')
 				data = rgba.tobytes('raw', 'RGBA')
-			# data is a bytes object that outlives the with block
 			qimg = QImage(data, w, h, QImage.Format_RGBA8888).copy()
 			pixmap = QPixmap.fromImage(qimg)
 			if pixmap.isNull():
 				self._show_message('Cannot load image')
 				return
-			size = os.path.getsize(path)
-			self._image_info.setText(
-				'%d x %d px  |  %s' % (w, h, _format_size(size))
+			self.show_image_pixmap(
+				pixmap, '%d x %d px  |  %s' % (w, h, _format_size(file_size))
 			)
-			self._current_pixmap = pixmap
-			self._scale_image()
-			self._stack.setCurrentIndex(1)
 		except Exception as e:
 			self._show_message('Cannot load image: %s' % e)
 
@@ -210,18 +213,14 @@ class PreviewWidget(QWidget):
 			return
 		w, h = pixmap.width(), pixmap.height()
 		if ext == '.svg':
-			self._image_info.setText('SVG canvas: %d x %d' % (w, h))
+			info = 'SVG canvas: %d x %d' % (w, h)
 		else:
 			try:
 				size = os.path.getsize(path)
 			except OSError:
 				size = 0
-			self._image_info.setText(
-				'%d x %d px  |  %s' % (w, h, _format_size(size))
-			)
-		self._current_pixmap = pixmap
-		self._scale_image()
-		self._stack.setCurrentIndex(1)
+			info = '%d x %d px  |  %s' % (w, h, _format_size(size))
+		self.show_image_pixmap(pixmap, info)
 
 	def _scale_image(self):
 		if not self._current_pixmap:
@@ -264,29 +263,30 @@ class PreviewWidget(QWidget):
 			)
 
 	def _show_directory_info(self, path):
-		try:
-			entries = os.listdir(path)
-		except OSError as e:
-			self._show_message('Cannot read directory: %s' % e)
-			return
 		num_files = 0
 		num_dirs = 0
 		total_size = 0
-		for i, entry in enumerate(entries):
-			if i >= _MAX_DIR_ENTRIES:
-				break
-			entry_path = os.path.join(path, entry)
-			try:
-				if os.path.isdir(entry_path):
-					num_dirs += 1
-				else:
-					num_files += 1
-					total_size += os.path.getsize(entry_path)
-			except OSError:
-				num_files += 1
+		truncated = False
+		try:
+			with os.scandir(path) as it:
+				for i, entry in enumerate(it):
+					if i >= _MAX_DIR_ENTRIES:
+						truncated = True
+						break
+					try:
+						if entry.is_dir(follow_symlinks=False):
+							num_dirs += 1
+						else:
+							num_files += 1
+							total_size += entry.stat().st_size
+					except OSError:
+						num_files += 1
+		except OSError as e:
+			self._show_message('Cannot read directory: %s' % e)
+			return
 		lines = ['Directory\n']
 		count_str = '{:,} files, {:,} folders'.format(num_files, num_dirs)
-		if len(entries) > _MAX_DIR_ENTRIES:
+		if truncated:
 			count_str += ' (first {:,} entries)'.format(_MAX_DIR_ENTRIES)
 		lines.append(count_str)
 		if total_size > 0:
@@ -316,6 +316,7 @@ class TogglePreview(DirectoryPaneCommand):
 			_deactivate_preview(self.pane)
 		else:
 			_activate_preview(self.pane)
+
 	def is_visible(self):
 		return len(self.pane.window.get_panes()) >= 2
 
@@ -327,6 +328,7 @@ class ExitPreview(DirectoryPaneCommand):
 	def __call__(self):
 		if self.pane in _active_previews:
 			_deactivate_preview(self.pane)
+
 	def is_visible(self):
 		return self.pane in _active_previews
 
@@ -337,6 +339,7 @@ class PreviewModeListener(DirectoryPaneListener):
 			file_url = self.pane.get_file_under_cursor()
 			state = _active_previews[self.pane]
 			state['preview_widget'].show_preview(file_url)
+
 	def on_command(self, command_name, args):
 		if self.pane in _active_previews:
 			if command_name in ('switch_panes', 'go_to'):

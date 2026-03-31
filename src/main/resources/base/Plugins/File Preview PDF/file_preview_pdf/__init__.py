@@ -35,32 +35,25 @@ def _show_pdf(widget, path):
 				fmt = QImage.Format_RGBA8888
 			else:
 				fmt = QImage.Format_RGB888
-			# .copy() ensures the QImage owns its data after doc closes
 			qimg = QImage(
 				pix.samples, pix.width, pix.height, pix.stride, fmt
 			).copy()
 			pixmap = QPixmap.fromImage(qimg)
 			num_pages = len(doc)
 			page_info = '%d pages' % num_pages if num_pages > 1 else '1 page'
-			widget._header.setText(
-				'%s (%s)' % (widget._header.text(), page_info)
-			)
+			name = os.path.basename(path)
+			widget._header.setText('%s (%s)' % (name, page_info))
 			try:
 				size = os.path.getsize(path)
 			except OSError:
 				size = 0
-			widget._image_info.setText(
-				'%s  |  %d x %d px' % (
-					_format_size(size), pix.width, pix.height
-				)
+			info = '%s  |  %d x %d px' % (
+				_format_size(size), pix.width, pix.height
 			)
-		widget._current_pixmap = pixmap
-		widget._scale_image()
-		widget._stack.setCurrentIndex(1)
+		widget.show_image_pixmap(pixmap, info)
 	except Exception as e:
 		widget._show_message('Cannot render PDF: %s' % e)
 
 
-# Register with PreviewWidget's handler registry
 if PreviewWidget is not None:
 	PreviewWidget.register_handler('.pdf', _show_pdf)
