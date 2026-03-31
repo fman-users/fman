@@ -149,10 +149,15 @@ def _notarize(file_path, query_interval_secs=10):
 		raise RuntimeError('Unexpected notarization status: %r' % status)
 
 def _run_altool(args):
+	user = os.environ.get(
+		'FMAN_APPLE_DEVELOPER_USER', SETTINGS.get('apple_developer_user', '')
+	)
+	pw = os.environ.get(
+		'FMAN_APPLE_DEVELOPER_APP_PW', SETTINGS.get('apple_developer_app_pw', '')
+	)
 	all_args = [
 		'xcrun', 'altool', '--output-format', 'xml',
-		'-u', SETTINGS['apple_developer_user'],
-		'-p', SETTINGS['apple_developer_app_pw']
+		'-u', user, '-p', pw
 	] + args
 	process = run(all_args, stdout=PIPE, stderr=PIPE, check=True)
 	return plistlib.loads(process.stdout)

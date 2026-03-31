@@ -8,6 +8,6 @@
 	"files_to_filter": [
 		"src/freeze/mac/Contents/SharedSupport/bin/fman"
 	],
-	"apple_developer_user": "michael@herrmann.io",
-	"apple_developer_app_pw": "apsy-xzlg-dszl-kttf"
+	"apple_developer_user": "",
+	"apple_developer_app_pw": ""
 }
