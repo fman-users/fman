@@ -644,8 +644,14 @@ def _build_override_qss(c):
 	"""Build QSS rules from custom theme colors."""
 	rules = []
 
+	# Universal background (matches how installed themes like Nord.qss work)
 	rules.append(
-		'QTableView, QDialog, QListView { background-color: %s; '
+		'* { background: %s; }'
+		% c.get('window_bg', _DEFAULTS['window_bg'])
+	)
+
+	rules.append(
+		'QTableView, QMessageBox, QDialog, QListView { background-color: %s; '
 		'alternate-background-color: %s; }'
 		% (c.get('base_bg', _DEFAULTS['base_bg']),
 		   c.get('alternate_bg', _DEFAULTS['alternate_bg']))
@@ -730,6 +736,18 @@ def _build_override_qss(c):
 		% c.get('quicksearch_selected', _DEFAULTS['quicksearch_selected'])
 	)
 
+	# Overlay and filter bar
+	rules.append(
+		'Overlay { background-color: %s; border: 1px solid %s; }'
+		% (c.get('base_bg', _DEFAULTS['base_bg']),
+		   c.get('input_border', _DEFAULTS['input_border']))
+	)
+	rules.append(
+		'FilterBar { background-color: %s; border: 1px solid %s; }'
+		% (c.get('base_bg', _DEFAULTS['base_bg']),
+		   c.get('input_border', _DEFAULTS['input_border']))
+	)
+
 	return '\n'.join(rules)
 
 
@@ -782,21 +800,27 @@ class CloseThemeEditor(DirectoryPaneCommand):
 
 
 class InitThemeListener(DirectoryPaneListener):
-	"""Apply saved custom theme on startup."""
+	"""Apply saved custom theme on startup, deferred to run after all plugins."""
 	_applied = False
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		if not InitThemeListener._applied:
 			InitThemeListener._applied = True
-			custom = _load_custom_theme()
-			non_default = _get_non_default_colors(
-				dict(_DEFAULTS, **custom)
-			) if custom else {}
-			if non_default:
-				colors = dict(_DEFAULTS)
-				colors.update(custom)
-				_apply_theme_to_app(colors)
+			# Defer so we run AFTER FmanAlternativeColors' delayed_init
+			from PyQt5.QtCore import QTimer
+			QTimer.singleShot(200, _apply_saved_custom_theme)
+
+
+def _apply_saved_custom_theme():
+	custom = _load_custom_theme()
+	non_default = _get_non_default_colors(
+		dict(_DEFAULTS, **custom)
+	) if custom else {}
+	if non_default:
+		colors = dict(_DEFAULTS)
+		colors.update(custom)
+		_apply_theme_to_app(colors)
 
 
 class ThemeEditorModeListener(DirectoryPaneListener):
