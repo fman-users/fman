@@ -260,8 +260,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 			cells.append(Cell(cell.str, col_val_asc, col_val_desc))
 		return File(row.url, row.icon, row.is_dir, cells, row.is_loaded)
 	def _accepts(self, row):
-		# ".." parent dir entries must never be hidden by filters
-		if row.key.endswith('/..') or row.key.endswith('%2F..'):
+		if row.key.endswith('/..'):
 			return True
 		return super()._accepts(row)
 	@transaction(priority=4)

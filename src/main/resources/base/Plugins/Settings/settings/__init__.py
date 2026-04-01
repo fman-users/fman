@@ -92,15 +92,23 @@ class SettingsPanel(QWidget):
 			child.installEventFilter(self)
 
 	def eventFilter(self, obj, event):
-		if event.type() == QEvent.KeyPress:
-			if event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier):
-				# Close settings and forward to file pane
-				_deactivate_settings(self._pane)
-				self._pane._widget._file_view.keyPressEvent(event)
-				return True
-			if event.key() == Qt.Key_Escape:
-				_deactivate_settings(self._pane)
-				return True
+		if event.type() != QEvent.KeyPress:
+			return False
+		key = event.key()
+		mods = event.modifiers()
+		# Escape closes the settings panel
+		if key == Qt.Key_Escape:
+			_deactivate_settings(self._pane)
+			return True
+		# Only intercept Cmd/Ctrl shortcuts that fman uses for navigation,
+		# not standard editing shortcuts (Ctrl+A/C/V/X/Z)
+		if mods & (Qt.ControlModifier | Qt.MetaModifier):
+			if key in (Qt.Key_A, Qt.Key_C, Qt.Key_V, Qt.Key_X, Qt.Key_Z):
+				return False
+			# Forward to file pane (Cmd+P, Cmd+Shift+P, Cmd+., etc.)
+			_deactivate_settings(self._pane)
+			self._pane._widget._file_view.keyPressEvent(event)
+			return True
 		return False
 
 	def _init_ui(self):
@@ -155,7 +163,6 @@ class SettingsPanel(QWidget):
 			'QLabel { font-weight: bold; '
 			'padding-top: 10px; padding-bottom: 4px; }'
 		)
-		label.setProperty('section_header', True)
 		self._layout.addWidget(label)
 
 	def _add_separator(self):
