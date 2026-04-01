@@ -807,12 +807,22 @@ class InitThemeListener(DirectoryPaneListener):
 		super().__init__(*args, **kwargs)
 		if not InitThemeListener._applied:
 			InitThemeListener._applied = True
-			# Defer so we run AFTER FmanAlternativeColors' delayed_init
+			# Defer so we run AFTER FmanAlternativeColors' delayed_init.
+			# Use 500ms + retry to handle slow startups.
 			from PyQt5.QtCore import QTimer
-			QTimer.singleShot(200, _apply_saved_custom_theme)
+			QTimer.singleShot(500, lambda: _apply_saved_custom_theme(0))
 
 
-def _apply_saved_custom_theme():
+def _apply_saved_custom_theme(attempt):
+	# Wait for FmanAlternativeColors to finish its delayed_init
+	try:
+		from alternative_colors import delayed_init_started
+		if not delayed_init_started and attempt < 5:
+			from PyQt5.QtCore import QTimer
+			QTimer.singleShot(300, lambda: _apply_saved_custom_theme(attempt + 1))
+			return
+	except ImportError:
+		pass
 	custom = _load_custom_theme()
 	non_default = _get_non_default_colors(
 		dict(_DEFAULTS, **custom)
