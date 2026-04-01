@@ -71,26 +71,33 @@ for _group in _THEME_ELEMENTS:
 		_DEFAULTS[_key] = _default
 
 _THEME_FILE_FILTER = 'fman Theme (*.fman-theme);;JSON (*.json);;All Files (*)'
+_THEME_EXIT_COMMANDS = frozenset(('switch_panes', 'go_to'))
+
+_CUSTOM_THEME_JSON = 'Custom Theme.json'
+_SAVED_THEMES_JSON = 'Saved Themes.json'
 
 
 def _load_custom_theme():
-	return load_json('Custom Theme.json', default={})
+	return load_json(_CUSTOM_THEME_JSON, default={})
 
 
-def _save_custom_theme(theme):
-	save_json('Custom Theme.json')
+def _save_custom_theme():
+	save_json(_CUSTOM_THEME_JSON)
 
 
 def _load_saved_themes():
-	return load_json('Saved Themes.json', default={})
+	return load_json(_SAVED_THEMES_JSON, default={})
 
 
 def _save_saved_themes():
-	save_json('Saved Themes.json')
+	save_json(_SAVED_THEMES_JSON)
+
+
+def _get_non_default_colors(colors):
+	return {k: v for k, v in colors.items() if v != _DEFAULTS.get(k)}
 
 
 class ColorButton(QPushButton):
-	"""A button that shows a color swatch and opens a color picker."""
 
 	def __init__(self, key, color, on_changed, parent=None):
 		super().__init__(parent)
@@ -132,7 +139,6 @@ class ThemePreview(QFrame):
 		super().__init__(parent)
 		self.setFrameShape(QFrame.Box)
 		self.setFixedHeight(140)
-		self._colors = dict(_DEFAULTS)
 		self._build_ui()
 
 	def _build_ui(self):
@@ -183,7 +189,6 @@ class ThemePreview(QFrame):
 		self.setLayout(self._layout)
 
 	def update_colors(self, colors):
-		self._colors = colors
 		c = colors
 
 		self._loc_bar.setStyleSheet(
@@ -406,15 +411,11 @@ class ThemeEditorPanel(QWidget):
 	# --- Apply / Reset ---
 
 	def _apply_theme(self):
-		custom = {}
-		for key, val in self._colors.items():
-			if val != _DEFAULTS.get(key):
-				custom[key] = val
-
+		custom = _get_non_default_colors(self._colors)
 		theme_data = _load_custom_theme()
 		theme_data.clear()
 		theme_data.update(custom)
-		_save_custom_theme(theme_data)
+		_save_custom_theme()
 
 		_apply_theme_to_app(self._colors)
 		show_status_message('Theme applied.', 3)
@@ -424,7 +425,7 @@ class ThemeEditorPanel(QWidget):
 
 		theme_data = _load_custom_theme()
 		theme_data.clear()
-		_save_custom_theme(theme_data)
+		_save_custom_theme()
 
 		_apply_theme_to_app(self._colors)
 		show_status_message('Theme reset to default.', 3)
@@ -460,12 +461,7 @@ class ThemeEditorPanel(QWidget):
 			return
 		name = name.strip()
 
-		# Build colors dict (only non-default values)
-		custom = {}
-		for key, val in self._colors.items():
-			if val != _DEFAULTS.get(key):
-				custom[key] = val
-
+		custom = _get_non_default_colors(self._colors)
 		saved = _load_saved_themes()
 		saved[name] = custom
 		_save_saved_themes()
@@ -495,12 +491,7 @@ class ThemeEditorPanel(QWidget):
 	# --- Import / Export ---
 
 	def _on_export_theme(self):
-		# Build export data
-		custom = {}
-		for key, val in self._colors.items():
-			if val != _DEFAULTS.get(key):
-				custom[key] = val
-
+		custom = _get_non_default_colors(self._colors)
 		current_name = self._theme_combo.currentText()
 		suggested_name = 'my-theme' if current_name == '(current)' else current_name
 		suggested_path = os.path.join(
@@ -794,7 +785,7 @@ class InitThemeListener(DirectoryPaneListener):
 class ThemeEditorModeListener(DirectoryPaneListener):
 	def on_command(self, command_name, args):
 		if self.pane in _active_theme_editors:
-			if command_name in ('switch_panes', 'go_to'):
+			if command_name in _THEME_EXIT_COMMANDS:
 				_deactivate_theme_editor(self.pane)
 		return None
 
