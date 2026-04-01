@@ -1,7 +1,7 @@
 from fman import DirectoryPaneCommand, DirectoryPaneListener, load_json, \
 	save_json, show_status_message, PLATFORM
 from fman.impl.util.qt.thread import run_in_main_thread
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QEvent
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, \
 	QScrollArea, QSizePolicy, QFrame, QPushButton, QCheckBox, \
 	QSpinBox, QLineEdit, QFileDialog, QComboBox, QApplication
@@ -22,7 +22,6 @@ _TOOLS = [
 	('native_file_manager', 'File manager', 'System default', ['{curr_dir}']),
 ]
 
-# Common font families available cross-platform
 _FONT_FAMILIES = [
 	'(system default)',
 	'Helvetica Neue',
@@ -43,7 +42,6 @@ def _set_checkbox_silent(cb, value):
 
 
 def _discover_themes():
-	"""Find all available themes from FmanAlternativeColors or fallback."""
 	try:
 		from alternative_colors import themes
 		return sorted(themes.keys())
@@ -53,7 +51,6 @@ def _discover_themes():
 
 
 def _get_active_theme_name():
-	"""Get the currently active theme name."""
 	try:
 		from alternative_colors import current_theme
 		return current_theme or 'Default'
@@ -63,7 +60,6 @@ def _get_active_theme_name():
 
 
 def _activate_theme_by_name(name):
-	"""Switch to a theme by name using FmanAlternativeColors."""
 	try:
 		from alternative_colors import activate_theme
 		activate_theme(name)
@@ -85,18 +81,27 @@ class SettingsPanel(QWidget):
 		self._pending_font_family = None
 		self._tool_inputs = {}
 		self._init_ui()
+		# Install event filter on all child widgets to intercept shortcuts
+		self._install_key_filter()
 
-	def keyPressEvent(self, event):
-		# Forward modifier shortcuts (Cmd+P, Cmd+Shift+P etc.) to the file pane
-		# so command palette/go-to works even when settings panel has focus
-		if event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier):
-			_deactivate_settings(self._pane)
-			self._pane._widget._file_view.keyPressEvent(event)
-			return
-		if event.key() == Qt.Key_Escape:
-			_deactivate_settings(self._pane)
-			return
-		super().keyPressEvent(event)
+	def _install_key_filter(self):
+		"""Install event filter on all child widgets so modifier shortcuts
+		(Cmd+P, Cmd+Shift+P) reach the file pane even when a settings
+		widget has focus."""
+		for child in self.findChildren(QWidget):
+			child.installEventFilter(self)
+
+	def eventFilter(self, obj, event):
+		if event.type() == QEvent.KeyPress:
+			if event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier):
+				# Close settings and forward to file pane
+				_deactivate_settings(self._pane)
+				self._pane._widget._file_view.keyPressEvent(event)
+				return True
+			if event.key() == Qt.Key_Escape:
+				_deactivate_settings(self._pane)
+				return True
+		return False
 
 	def _init_ui(self):
 		self.setMinimumWidth(0)
@@ -145,17 +150,18 @@ class SettingsPanel(QWidget):
 
 	def _add_section_header(self, title):
 		label = QLabel(title)
+		# Use palette highlight color instead of hardcoded green
 		label.setStyleSheet(
-			'QLabel { color: #a6e22e; font-weight: bold; '
+			'QLabel { font-weight: bold; '
 			'padding-top: 10px; padding-bottom: 4px; }'
 		)
+		label.setProperty('section_header', True)
 		self._layout.addWidget(label)
 
 	def _add_separator(self):
 		line = QFrame()
 		line.setFrameShape(QFrame.HLine)
 		line.setFrameShadow(QFrame.Sunken)
-		line.setStyleSheet('QFrame { color: #3e3e3e; }')
 		self._layout.addWidget(line)
 
 	def _build_display_section(self):
@@ -355,7 +361,6 @@ def _get_default_font_size():
 
 
 def _apply_font_settings(size_pt=None, family=None):
-	"""Apply font size and/or family. Uses QSS to override Theme.css."""
 	app = QApplication.instance()
 	if app is None:
 		return
@@ -365,7 +370,6 @@ def _apply_font_settings(size_pt=None, family=None):
 	if family is None:
 		family = user_settings.get('font_family', '')
 
-	# Build QSS override that takes precedence over Theme.css font-size
 	current = app.styleSheet()
 	marker = '/* FONT_SETTINGS_START */'
 	end_marker = '/* FONT_SETTINGS_END */'
@@ -415,8 +419,6 @@ def _friendly_app_name(path):
 		name = name[:-4]
 	return name or path
 
-
-# --- Commands and Listeners ---
 
 _active_settings = {}
 _settings_in_transition = set()
