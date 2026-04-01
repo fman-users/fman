@@ -35,10 +35,13 @@ requirements/                 # Per-platform dependency files
 | `src/main/python/fman/impl/view/__init__.py` | FileListView (QTableView subclass) |
 | `src/main/python/fman/impl/controller.py` | Keyboard shortcut dispatch |
 | `src/main/resources/base/Plugins/Core/core/commands/__init__.py` | All commands and listeners |
-| `src/main/resources/base/Plugins/Core/core/preview.py` | File preview widget |
 | `src/main/resources/base/Plugins/Core/core/fs/local/__init__.py` | Local filesystem implementation |
 | `src/main/resources/base/Plugins/Core/Key Bindings.json` | Cross-platform key bindings |
 | `src/main/resources/base/Plugins/Core/Key Bindings (Mac).json` | macOS-specific key bindings |
+| `src/main/resources/base/Plugins/File Preview/file_preview/__init__.py` | File preview widget (text, images, directories) |
+| `src/main/resources/base/Plugins/File Preview PDF/file_preview_pdf/__init__.py` | PDF preview addon (PyMuPDF) |
+| `src/main/resources/base/Plugins/Settings/settings/__init__.py` | Settings panel (Cmd+,) |
+| `src/main/resources/base/Plugins/Theme Editor/theme_editor/__init__.py` | Theme editor with color pickers |
 | `src/build/python/build_impl/mac.py` | macOS freeze/sign/bundle logic |
 
 ## Development workflow
@@ -139,9 +142,20 @@ cp -r "My Plugin" "~/Library/Application Support/fman/Plugins/Third-party/"
 
 ### Adding a new file preview type
 
-1. Add extension detection in `PreviewWidget.show_preview()` in `core/preview.py`
-2. Add a `_show_xxx()` method that sets content and calls `self._stack.setCurrentIndex(N)`
-3. Page 0 = text, Page 1 = image/visual, Page 2 = fallback message
+1. Register a handler via `PreviewWidget.register_handler('.ext', handler_fn)` in your plugin's `__init__.py`
+2. The handler receives `(widget, path)` — use `widget.show_image_pixmap(pixmap, info)` for images
+3. See `File Preview PDF` plugin for a complete example
+
+### Pane-swap panel pattern
+
+Settings, Theme Editor, and File Preview all use the same pattern to replace the opposite pane:
+
+1. Get the other pane's widget via `panes[other_index]._widget`
+2. Hide it, insert your panel at the same splitter index
+3. Store `{'panel', 'target_widget', 'splitter_sizes'}` state
+4. On deactivate: hide panel, show target widget, restore splitter sizes, `deleteLater()`
+5. Use a `_in_transition` set guard to prevent double-press race conditions
+6. Add mutual exclusion: close other panels before opening yours (`try/except ImportError`)
 
 ### Adding a new filter
 
@@ -150,6 +164,21 @@ Follow the `ToggleHiddenFiles` / `_hidden_file_filter` pattern:
 2. Create a Toggle command that calls `pane._add_filter()` / `pane._remove_filter()`
 3. Create an Init listener to set up filter state on startup
 4. Store settings in `Panes.json` via `_get_pane_info(pane)`
+
+### Adding a setting to the Settings panel
+
+1. Add UI widget in `SettingsPanel._build_*_section()` in the Settings plugin
+2. Connect to existing commands via `self._pane.run_command('command_name')`
+3. For checkboxes that sync with external state: re-read actual state after command, use `blockSignals` to prevent loops
+4. The Settings panel's "Edit..." button opens the Theme Editor via `edit_theme` command
+
+### Theme customization
+
+- Custom themes are stored in `Custom Theme.json` (active theme) and `Saved Themes.json` (named presets)
+- Theme files use `.fman-theme` extension: `{"fman_theme": 1, "name": "...", "colors": {"key": "#hex"}}`
+- Colors are applied via QPalette updates + QSS overrides (marker-delimited block in the app stylesheet)
+- `_THEME_ELEMENTS` defines all 20 themeable color keys with their defaults from `styles.qss`
+- `InitThemeListener` applies saved custom theme on startup
 
 ## Important constraints
 
