@@ -124,6 +124,10 @@ class SettingsPanel(QWidget):
 		theme_label = QLabel('Dark (built-in)')
 		theme_label.setStyleSheet('QLabel { color: #666; }')
 		row.addWidget(theme_label)
+		edit_theme_btn = QPushButton('Edit...')
+		edit_theme_btn.setFixedWidth(60)
+		edit_theme_btn.clicked.connect(self._on_edit_theme)
+		row.addWidget(edit_theme_btn)
 		self._layout.addLayout(row)
 
 		self._add_separator()
@@ -174,6 +178,12 @@ class SettingsPanel(QWidget):
 		self._add_separator()
 
 	# --- Handlers ---
+
+	def _on_edit_theme(self):
+		# Close settings and open theme editor
+		if self._pane in _active_settings:
+			_deactivate_settings(self._pane)
+		self._pane.run_command('edit_theme')
 
 	def _on_hidden_files_toggled(self, _checked):
 		self._pane.run_command('toggle_hidden_files')
