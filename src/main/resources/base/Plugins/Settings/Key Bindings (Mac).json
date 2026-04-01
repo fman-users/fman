@@ -1,0 +1,4 @@
+[
+	{ "keys": ["Cmd+,"], "command": "open_settings" },
+	{ "keys": ["Escape"], "command": "close_settings" }
+]
