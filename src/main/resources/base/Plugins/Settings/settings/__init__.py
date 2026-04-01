@@ -114,6 +114,8 @@ class SettingsPanel(QWidget):
 	def _init_ui(self):
 		self.setMinimumWidth(0)
 		self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+		# Ensure QSS * rules (from themes) apply to this widget's background
+		self.setAttribute(Qt.WA_StyledBackground, True)
 
 		outer = QVBoxLayout()
 		outer.setContentsMargins(0, 0, 0, 0)
@@ -129,8 +131,10 @@ class SettingsPanel(QWidget):
 		scroll.setWidgetResizable(True)
 		scroll.setFrameShape(QFrame.NoFrame)
 		scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+		scroll.setAttribute(Qt.WA_StyledBackground, True)
 
 		content = QWidget()
+		content.setAttribute(Qt.WA_StyledBackground, True)
 		self._layout = QVBoxLayout()
 		self._layout.setContentsMargins(12, 8, 12, 12)
 		self._layout.setSpacing(6)

@@ -272,6 +272,7 @@ class ThemeEditorPanel(QWidget):
 	def _init_ui(self):
 		self.setMinimumWidth(0)
 		self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+		self.setAttribute(Qt.WA_StyledBackground, True)
 
 		outer = QVBoxLayout()
 		outer.setContentsMargins(0, 0, 0, 0)
@@ -307,8 +308,10 @@ class ThemeEditorPanel(QWidget):
 		scroll.setWidgetResizable(True)
 		scroll.setFrameShape(QFrame.NoFrame)
 		scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+		scroll.setAttribute(Qt.WA_StyledBackground, True)
 
 		content = QWidget()
+		content.setAttribute(Qt.WA_StyledBackground, True)
 		self._grid_layout = QVBoxLayout()
 		self._grid_layout.setContentsMargins(8, 4, 8, 8)
 		self._grid_layout.setSpacing(4)
