@@ -25,6 +25,7 @@ _THEME_ELEMENTS = [
 		'items': [
 			('window_bg', 'Window', '#2b2b2b'),
 			('base_bg', 'File list', '#272822'),
+			('alternate_bg', 'File list (alternate row)', '#272822'),
 			('header_bg_top', 'Column header (top)', '#363731'),
 			('header_bg_bottom', 'Column header (bottom)', '#272822'),
 			('status_bar_bg_top', 'Status bar (top)', '#5b5b5b'),
@@ -210,6 +211,7 @@ class ThemePreview(QFrame):
 		)
 
 		base_bg = c.get('base_bg', _DEFAULTS['base_bg'])
+		alt_bg = c.get('alternate_bg', _DEFAULTS['alternate_bg'])
 		cursor_bg = c.get('cursor_bg', _DEFAULTS['cursor_bg'])
 		text_dirs = c.get('text_dirs', _DEFAULTS['text_dirs'])
 		text_secondary = c.get('text_secondary', _DEFAULTS['text_secondary'])
@@ -219,8 +221,15 @@ class ThemePreview(QFrame):
 			'QWidget { background-color: %s; }' % base_bg
 		)
 
-		for label, is_dir, is_selected, is_cursor in self._row_labels:
-			bg = cursor_bg if is_cursor else base_bg
+		for i, (label, is_dir, is_selected, is_cursor) in enumerate(
+			self._row_labels
+		):
+			if is_cursor:
+				bg = cursor_bg
+			elif i % 2:
+				bg = alt_bg
+			else:
+				bg = base_bg
 			if is_selected:
 				fg = selected_color
 			elif is_dir:
@@ -633,8 +642,10 @@ def _build_override_qss(c):
 	rules = []
 
 	rules.append(
-		'QTableView, QDialog, QListView { background-color: %s; }'
-		% c.get('base_bg', _DEFAULTS['base_bg'])
+		'QTableView, QDialog, QListView { background-color: %s; '
+		'alternate-background-color: %s; }'
+		% (c.get('base_bg', _DEFAULTS['base_bg']),
+		   c.get('alternate_bg', _DEFAULTS['alternate_bg']))
 	)
 
 	rules.append(
