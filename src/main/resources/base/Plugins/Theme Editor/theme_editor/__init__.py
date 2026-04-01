@@ -4,15 +4,19 @@ Theme Editor - visual theme customization for fman.
 Extends the Settings plugin with a theme editor sub-panel. Opens from
 the Settings panel or via Command Palette ("Edit theme").
 Uses color pickers to style all themeable elements with live preview.
+Supports saving named themes and export/import as .fman-theme files.
 """
 from fman import DirectoryPaneCommand, DirectoryPaneListener, load_json, \
-	save_json, show_status_message
+	save_json, show_status_message, show_alert, show_prompt, YES, NO
 from fman.impl.util.qt.thread import run_in_main_thread
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, \
 	QScrollArea, QSizePolicy, QFrame, QPushButton, QColorDialog, \
-	QApplication
+	QComboBox, QFileDialog, QApplication
+
+import json
+import os
 
 # The themeable elements and their default colors (from styles.qss + palette)
 _THEME_ELEMENTS = [
@@ -66,6 +70,8 @@ for _group in _THEME_ELEMENTS:
 	for _key, _label, _default in _group['items']:
 		_DEFAULTS[_key] = _default
 
+_THEME_FILE_FILTER = 'fman Theme (*.fman-theme);;JSON (*.json);;All Files (*)'
+
 
 def _load_custom_theme():
 	return load_json('Custom Theme.json', default={})
@@ -73,6 +79,14 @@ def _load_custom_theme():
 
 def _save_custom_theme(theme):
 	save_json('Custom Theme.json')
+
+
+def _load_saved_themes():
+	return load_json('Saved Themes.json', default={})
+
+
+def _save_saved_themes():
+	save_json('Saved Themes.json')
 
 
 class ColorButton(QPushButton):
@@ -132,7 +146,9 @@ class ThemePreview(QFrame):
 		self._layout.addWidget(self._loc_bar)
 
 		# Header row
-		self._header = QLabel('  Name                         Size       Modified')
+		self._header = QLabel(
+			'  Name                         Size       Modified'
+		)
 		self._header.setFixedHeight(20)
 		self._layout.addWidget(self._header)
 
@@ -170,7 +186,6 @@ class ThemePreview(QFrame):
 		self._colors = colors
 		c = colors
 
-		# Location bar
 		self._loc_bar.setStyleSheet(
 			'QLabel { background-color: %s; color: %s; padding-left: 4px; '
 			'font-size: 10px; border-bottom: 1px solid %s; }' % (
@@ -180,7 +195,6 @@ class ThemePreview(QFrame):
 			)
 		)
 
-		# Header
 		self._header.setStyleSheet(
 			'QLabel { background: qlineargradient(x1:0,y1:0,x2:0,y2:1,'
 			'stop:0 %s, stop:1 %s); color: %s; font-size: 9px; }' % (
@@ -190,7 +204,6 @@ class ThemePreview(QFrame):
 			)
 		)
 
-		# Rows
 		base_bg = c.get('base_bg', _DEFAULTS['base_bg'])
 		cursor_bg = c.get('cursor_bg', _DEFAULTS['cursor_bg'])
 		text_dirs = c.get('text_dirs', _DEFAULTS['text_dirs'])
@@ -214,7 +227,6 @@ class ThemePreview(QFrame):
 				'font-size: 10px; padding-left: 4px; }' % (bg, fg)
 			)
 
-		# Status bar
 		self._status.setStyleSheet(
 			'QLabel { background: qlineargradient(x1:0,y1:0,x2:0,y2:1,'
 			'stop:0 %s, stop:1 %s); color: %s; font-size: 9px; '
@@ -276,7 +288,7 @@ class ThemeEditorPanel(QWidget):
 		self._preview.update_colors(self._colors)
 		outer.addWidget(self._preview)
 
-		# Scrollable color pickers
+		# Scrollable content
 		scroll = QScrollArea()
 		scroll.setWidgetResizable(True)
 		scroll.setFrameShape(QFrame.NoFrame)
@@ -287,15 +299,41 @@ class ThemeEditorPanel(QWidget):
 		self._grid_layout.setContentsMargins(8, 4, 8, 8)
 		self._grid_layout.setSpacing(4)
 
+		# --- Saved themes selector ---
+		self._add_section_header('Saved Themes')
+		theme_row = QHBoxLayout()
+		theme_row.setSpacing(4)
+		self._theme_combo = QComboBox()
+		self._theme_combo.setMinimumWidth(100)
+		self._refresh_theme_list()
+		self._theme_combo.currentIndexChanged.connect(self._on_theme_selected)
+		theme_row.addWidget(self._theme_combo)
+		save_btn = QPushButton('Save')
+		save_btn.setFixedWidth(44)
+		save_btn.clicked.connect(self._on_save_theme)
+		theme_row.addWidget(save_btn)
+		del_btn = QPushButton('Del')
+		del_btn.setFixedWidth(34)
+		del_btn.clicked.connect(self._on_delete_theme)
+		theme_row.addWidget(del_btn)
+		self._grid_layout.addLayout(theme_row)
+
+		# Import / Export row
+		io_row = QHBoxLayout()
+		io_row.setSpacing(4)
+		import_btn = QPushButton('Import...')
+		import_btn.clicked.connect(self._on_import_theme)
+		io_row.addWidget(import_btn)
+		export_btn = QPushButton('Export...')
+		export_btn.clicked.connect(self._on_export_theme)
+		io_row.addWidget(export_btn)
+		self._grid_layout.addLayout(io_row)
+
+		# --- Color pickers ---
 		self._color_buttons = {}
 
 		for group in _THEME_ELEMENTS:
-			group_label = QLabel(group['group'])
-			group_label.setStyleSheet(
-				'QLabel { color: #a6e22e; font-weight: bold; font-size: 11px; '
-				'padding-top: 8px; padding-bottom: 2px; }'
-			)
-			self._grid_layout.addWidget(group_label)
+			self._add_section_header(group['group'])
 
 			for key, label, default in group['items']:
 				row = QHBoxLayout()
@@ -344,12 +382,30 @@ class ThemeEditorPanel(QWidget):
 		outer.addWidget(scroll)
 		self.setLayout(outer)
 
+	def _add_section_header(self, title):
+		label = QLabel(title)
+		label.setStyleSheet(
+			'QLabel { color: #a6e22e; font-weight: bold; font-size: 11px; '
+			'padding-top: 8px; padding-bottom: 2px; }'
+		)
+		self._grid_layout.addWidget(label)
+
+	# --- Color picker handlers ---
+
 	def _on_color_changed(self, key, hex_color):
 		self._colors[key] = hex_color
 		self._preview.update_colors(self._colors)
 
+	def _load_colors_into_ui(self, colors):
+		self._colors = dict(_DEFAULTS)
+		self._colors.update(colors)
+		for key, btn in self._color_buttons.items():
+			btn.set_color(self._colors.get(key, _DEFAULTS.get(key, '#000')))
+		self._preview.update_colors(self._colors)
+
+	# --- Apply / Reset ---
+
 	def _apply_theme(self):
-		# Save custom colors (only those that differ from defaults)
 		custom = {}
 		for key, val in self._colors.items():
 			if val != _DEFAULTS.get(key):
@@ -364,10 +420,7 @@ class ThemeEditorPanel(QWidget):
 		show_status_message('Theme applied.', 3)
 
 	def _reset_theme(self):
-		self._colors = dict(_DEFAULTS)
-		for key, btn in self._color_buttons.items():
-			btn.set_color(_DEFAULTS[key])
-		self._preview.update_colors(self._colors)
+		self._load_colors_into_ui({})
 
 		theme_data = _load_custom_theme()
 		theme_data.clear()
@@ -376,8 +429,162 @@ class ThemeEditorPanel(QWidget):
 		_apply_theme_to_app(self._colors)
 		show_status_message('Theme reset to default.', 3)
 
+	# --- Saved themes ---
+
+	def _refresh_theme_list(self):
+		self._theme_combo.blockSignals(True)
+		self._theme_combo.clear()
+		self._theme_combo.addItem('(current)')
+		saved = _load_saved_themes()
+		for name in sorted(saved.keys()):
+			self._theme_combo.addItem(name)
+		self._theme_combo.setCurrentIndex(0)
+		self._theme_combo.blockSignals(False)
+
+	def _on_theme_selected(self, index):
+		if index <= 0:
+			return
+		name = self._theme_combo.currentText()
+		saved = _load_saved_themes()
+		theme_colors = saved.get(name, {})
+		self._load_colors_into_ui(theme_colors)
+
+	def _on_save_theme(self):
+		current_name = self._theme_combo.currentText()
+		default_name = '' if current_name == '(current)' else current_name
+		result = show_prompt('Theme name:', default_name)
+		if not result:
+			return
+		name, ok = result
+		if not ok or not name.strip():
+			return
+		name = name.strip()
+
+		# Build colors dict (only non-default values)
+		custom = {}
+		for key, val in self._colors.items():
+			if val != _DEFAULTS.get(key):
+				custom[key] = val
+
+		saved = _load_saved_themes()
+		saved[name] = custom
+		_save_saved_themes()
+
+		self._refresh_theme_list()
+		# Select the newly saved theme
+		idx = self._theme_combo.findText(name)
+		if idx >= 0:
+			self._theme_combo.setCurrentIndex(idx)
+		show_status_message('Theme "%s" saved.' % name, 3)
+
+	def _on_delete_theme(self):
+		name = self._theme_combo.currentText()
+		if name == '(current)':
+			return
+		choice = show_alert(
+			'Delete theme "%s"?' % name, YES | NO, NO
+		)
+		if not (choice & YES):
+			return
+		saved = _load_saved_themes()
+		saved.pop(name, None)
+		_save_saved_themes()
+		self._refresh_theme_list()
+		show_status_message('Theme "%s" deleted.' % name, 3)
+
+	# --- Import / Export ---
+
+	def _on_export_theme(self):
+		# Build export data
+		custom = {}
+		for key, val in self._colors.items():
+			if val != _DEFAULTS.get(key):
+				custom[key] = val
+
+		current_name = self._theme_combo.currentText()
+		suggested_name = 'my-theme' if current_name == '(current)' else current_name
+		suggested_path = os.path.join(
+			os.path.expanduser('~'), suggested_name + '.fman-theme'
+		)
+
+		path, _ = QFileDialog.getSaveFileName(
+			self, 'Export Theme', suggested_path, _THEME_FILE_FILTER
+		)
+		if not path:
+			return
+
+		export_data = {
+			'fman_theme': 1,
+			'name': current_name if current_name != '(current)' else '',
+			'colors': custom,
+		}
+		try:
+			with open(path, 'w', encoding='utf-8') as f:
+				json.dump(export_data, f, indent=2, sort_keys=True)
+			show_status_message('Theme exported to %s' % os.path.basename(path), 3)
+		except OSError as e:
+			show_alert('Could not export theme: %s' % e)
+
+	def _on_import_theme(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, 'Import Theme', os.path.expanduser('~'), _THEME_FILE_FILTER
+		)
+		if not path:
+			return
+
+		try:
+			with open(path, 'r', encoding='utf-8') as f:
+				data = json.load(f)
+		except (OSError, json.JSONDecodeError) as e:
+			show_alert('Could not read theme file: %s' % e)
+			return
+
+		# Accept both raw color dicts and wrapped format
+		if isinstance(data, dict) and 'colors' in data:
+			colors = data['colors']
+			name = data.get('name', '')
+		elif isinstance(data, dict):
+			colors = data
+			name = ''
+		else:
+			show_alert('Invalid theme file format.')
+			return
+
+		# Validate: all values should be color strings
+		valid_keys = set(_DEFAULTS.keys())
+		cleaned = {}
+		for k, v in colors.items():
+			if k in valid_keys and isinstance(v, str) and QColor(v).isValid():
+				cleaned[k] = v
+
+		if not cleaned:
+			show_alert('No valid color values found in theme file.')
+			return
+
+		self._load_colors_into_ui(cleaned)
+
+		# Offer to save
+		if not name:
+			base = os.path.basename(path)
+			name = os.path.splitext(base)[0]
+
+		result = show_prompt('Save imported theme as:', name)
+		if result:
+			save_name, ok = result
+			if ok and save_name.strip():
+				saved = _load_saved_themes()
+				saved[save_name.strip()] = cleaned
+				_save_saved_themes()
+				self._refresh_theme_list()
+				idx = self._theme_combo.findText(save_name.strip())
+				if idx >= 0:
+					self._theme_combo.setCurrentIndex(idx)
+
+		show_status_message('Theme imported.', 3)
+
+	# --- Navigation ---
+
 	def _go_back(self):
-		# Close theme editor and reopen settings
 		if self._pane in _active_theme_editors:
 			_deactivate_theme_editor(self._pane)
 			self._pane.run_command('open_settings')
@@ -393,18 +600,28 @@ def _apply_theme_to_app(colors):
 
 	# Update QPalette
 	palette = app.palette()
-	palette.setColor(QPalette.Window, QColor(c.get('window_bg', _DEFAULTS['window_bg'])))
-	palette.setColor(QPalette.WindowText, QColor(c.get('text_primary', _DEFAULTS['text_primary'])))
-	palette.setColor(QPalette.Base, QColor(c.get('base_bg', _DEFAULTS['base_bg'])))
-	palette.setColor(QPalette.Text, QColor(c.get('text_primary', _DEFAULTS['text_primary'])))
+	palette.setColor(
+		QPalette.Window,
+		QColor(c.get('window_bg', _DEFAULTS['window_bg']))
+	)
+	palette.setColor(
+		QPalette.WindowText,
+		QColor(c.get('text_primary', _DEFAULTS['text_primary']))
+	)
+	palette.setColor(
+		QPalette.Base,
+		QColor(c.get('base_bg', _DEFAULTS['base_bg']))
+	)
+	palette.setColor(
+		QPalette.Text,
+		QColor(c.get('text_primary', _DEFAULTS['text_primary']))
+	)
 	palette.setColor(QPalette.ButtonText, QColor('#b6b3ab'))
 	app.setPalette(palette)
 
 	# Build and apply QSS overrides
 	qss = _build_override_qss(c)
-	# We need to append to the existing stylesheet, not replace it
 	current = app.styleSheet()
-	# Remove any previous custom theme block
 	marker = '/* CUSTOM_THEME_START */'
 	end_marker = '/* CUSTOM_THEME_END */'
 	if marker in current:
@@ -424,13 +641,11 @@ def _build_override_qss(c):
 	"""Build QSS rules from custom theme colors."""
 	rules = []
 
-	# Table / file list
 	rules.append(
 		'QTableView, QDialog, QListView { background-color: %s; }'
 		% c.get('base_bg', _DEFAULTS['base_bg'])
 	)
 
-	# Header
 	rules.append(
 		'QHeaderView, QHeaderView::section { '
 		'background: qlineargradient(x1:0,y1:0,x2:0,y2:1,'
@@ -443,7 +658,6 @@ def _build_override_qss(c):
 		% c.get('text_header', _DEFAULTS['text_header'])
 	)
 
-	# File items
 	rules.append(
 		'QTableView::item { color: %s; }'
 		% c.get('text_secondary', _DEFAULTS['text_secondary'])
@@ -462,13 +676,11 @@ def _build_override_qss(c):
 		% c.get('cursor_bg', _DEFAULTS['cursor_bg'])
 	)
 
-	# Labels
 	rules.append(
 		'QLabel, QRadioButton, QCheckBox { color: %s; }'
 		% c.get('text_secondary', _DEFAULTS['text_secondary'])
 	)
 
-	# Input fields
 	rules.append(
 		'QLineEdit { color: %s; background-color: %s; '
 		'border: 1px solid %s; }'
@@ -477,14 +689,12 @@ def _build_override_qss(c):
 		   c.get('input_border', _DEFAULTS['input_border']))
 	)
 
-	# Location bar
 	rules.append(
 		'LocationBar:read-only { border-bottom: 1px solid %s; color: %s; }'
 		% (c.get('location_bar_border', _DEFAULTS['location_bar_border']),
 		   c.get('text_location', _DEFAULTS['text_location']))
 	)
 
-	# Status bar
 	rules.append(
 		'QStatusBar { background: qlineargradient(x1:0,y1:0,x2:0,y2:1,'
 		'stop:0 %s, stop:1 %s); border-top: 1px solid %s; }'
@@ -497,7 +707,6 @@ def _build_override_qss(c):
 		% c.get('text_status', _DEFAULTS['text_status'])
 	)
 
-	# Quick search
 	rules.append(
 		'Quicksearch { background-color: %s; }'
 		% c.get('quicksearch_bg', _DEFAULTS['quicksearch_bg'])
