@@ -776,7 +776,10 @@ class InitThemeListener(DirectoryPaneListener):
 		if not InitThemeListener._applied:
 			InitThemeListener._applied = True
 			custom = _load_custom_theme()
-			if custom:
+			non_default = _get_non_default_colors(
+				dict(_DEFAULTS, **custom)
+			) if custom else {}
+			if non_default:
 				colors = dict(_DEFAULTS)
 				colors.update(custom)
 				_apply_theme_to_app(colors)

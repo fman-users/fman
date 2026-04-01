@@ -259,6 +259,11 @@ class Model(SortFilterTableModel, DragAndDrop):
 				col_val_desc = cell.sort_value_desc
 			cells.append(Cell(cell.str, col_val_asc, col_val_desc))
 		return File(row.url, row.icon, row.is_dir, cells, row.is_loaded)
+	def _accepts(self, row):
+		# ".." parent dir entries must never be hidden by filters
+		if row.key.endswith('/..') or row.key.endswith('%2F..'):
+			return True
+		return super()._accepts(row)
 	@transaction(priority=4)
 	def add_filter(self, filter_):
 		super().add_filter(filter_)

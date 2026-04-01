@@ -4,7 +4,7 @@ from fman.impl.util.qt.thread import run_in_main_thread
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, \
 	QScrollArea, QSizePolicy, QFrame, QPushButton, QCheckBox, \
-	QSpinBox, QLineEdit, QFileDialog
+	QSpinBox, QLineEdit, QFileDialog, QComboBox, QApplication
 
 import os
 
@@ -22,6 +22,19 @@ _TOOLS = [
 	('native_file_manager', 'File manager', 'System default', ['{curr_dir}']),
 ]
 
+# Common font families available cross-platform
+_FONT_FAMILIES = [
+	'(system default)',
+	'Helvetica Neue',
+	'Arial',
+	'Menlo',
+	'Monaco',
+	'Courier New',
+	'Verdana',
+	'Georgia',
+	'Trebuchet MS',
+]
+
 
 def _set_checkbox_silent(cb, value):
 	cb.blockSignals(True)
@@ -37,10 +50,23 @@ class SettingsPanel(QWidget):
 		self._save_timer = QTimer(self)
 		self._save_timer.setSingleShot(True)
 		self._save_timer.setInterval(500)
-		self._save_timer.timeout.connect(self._flush_font_size)
+		self._save_timer.timeout.connect(self._flush_font_settings)
 		self._pending_font_size = None
+		self._pending_font_family = None
 		self._tool_inputs = {}
 		self._init_ui()
+
+	def keyPressEvent(self, event):
+		# Forward modifier shortcuts (Cmd+P, Cmd+Shift+P etc.) to the file pane
+		# so command palette/go-to works even when settings panel has focus
+		if event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier):
+			_deactivate_settings(self._pane)
+			self._pane._widget._file_view.keyPressEvent(event)
+			return
+		if event.key() == Qt.Key_Escape:
+			_deactivate_settings(self._pane)
+			return
+		super().keyPressEvent(event)
 
 	def _init_ui(self):
 		self.setMinimumWidth(0)
@@ -52,8 +78,7 @@ class SettingsPanel(QWidget):
 
 		header = QLabel('Settings')
 		header.setStyleSheet(
-			'QLabel { padding: 8px 12px; font-weight: bold; font-size: 14px; '
-			'color: white; }'
+			'QLabel { padding: 8px 12px; font-weight: bold; color: white; }'
 		)
 		outer.addWidget(header)
 
@@ -91,7 +116,7 @@ class SettingsPanel(QWidget):
 	def _add_section_header(self, title):
 		label = QLabel(title)
 		label.setStyleSheet(
-			'QLabel { color: #a6e22e; font-weight: bold; font-size: 12px; '
+			'QLabel { color: #a6e22e; font-weight: bold; '
 			'padding-top: 10px; padding-bottom: 4px; }'
 		)
 		self._layout.addWidget(label)
@@ -106,18 +131,43 @@ class SettingsPanel(QWidget):
 	def _build_display_section(self):
 		self._add_section_header('Display')
 
+		user_settings = load_json(_SETTINGS_JSON, default={})
+
+		# Font family
+		row = QHBoxLayout()
+		row.addWidget(QLabel('Font'))
+		row.addStretch()
+		self._font_family_combo = QComboBox()
+		self._font_family_combo.setFixedWidth(160)
+		for family in _FONT_FAMILIES:
+			self._font_family_combo.addItem(family)
+		saved_family = user_settings.get('font_family', '')
+		if saved_family and saved_family in _FONT_FAMILIES:
+			self._font_family_combo.setCurrentText(saved_family)
+		else:
+			self._font_family_combo.setCurrentIndex(0)
+		self._font_family_combo.currentTextChanged.connect(
+			self._on_font_family_changed
+		)
+		row.addWidget(self._font_family_combo)
+		self._layout.addLayout(row)
+
+		# Font size
 		row = QHBoxLayout()
 		row.addWidget(QLabel('Font size'))
 		row.addStretch()
 		self._font_size_spin = QSpinBox()
 		self._font_size_spin.setRange(8, 48)
 		self._font_size_spin.setSuffix(' pt')
-		self._font_size_spin.setValue(self._get_font_size())
+		self._font_size_spin.setValue(
+			user_settings.get('font_size', _get_default_font_size())
+		)
 		self._font_size_spin.setFixedWidth(80)
 		self._font_size_spin.valueChanged.connect(self._on_font_size_changed)
 		row.addWidget(self._font_size_spin)
 		self._layout.addLayout(row)
 
+		# Theme
 		row = QHBoxLayout()
 		row.addWidget(QLabel('Theme'))
 		row.addStretch()
@@ -177,10 +227,7 @@ class SettingsPanel(QWidget):
 
 		self._add_separator()
 
-	# --- Handlers ---
-
 	def _on_edit_theme(self):
-		# Close settings and open theme editor
 		if self._pane in _active_settings:
 			_deactivate_settings(self._pane)
 		self._pane.run_command('edit_theme')
@@ -201,21 +248,31 @@ class SettingsPanel(QWidget):
 			pane_info.get('show_parent_dir_entry', False)
 		)
 
-	def _get_font_size(self):
-		user_settings = load_json(_SETTINGS_JSON, default={})
-		return user_settings.get('font_size', _get_default_font_size())
-
 	def _on_font_size_changed(self, value):
 		self._pending_font_size = value
-		_apply_font_size(value)
+		_apply_font_settings(value, None)
 		self._save_timer.start()
 
-	def _flush_font_size(self):
+	def _on_font_family_changed(self, family):
+		if family == '(system default)':
+			family = ''
+		self._pending_font_family = family
+		_apply_font_settings(None, family)
+		self._save_timer.start()
+
+	def _flush_font_settings(self):
+		user_settings = load_json(_SETTINGS_JSON, default={})
+		changed = False
 		if self._pending_font_size is not None:
-			user_settings = load_json(_SETTINGS_JSON, default={})
 			user_settings['font_size'] = self._pending_font_size
-			save_json(_SETTINGS_JSON)
 			self._pending_font_size = None
+			changed = True
+		if self._pending_font_family is not None:
+			user_settings['font_family'] = self._pending_font_family
+			self._pending_font_family = None
+			changed = True
+		if changed:
+			save_json(_SETTINGS_JSON)
 
 	def _on_browse_tool(self, key):
 		tool_def = next(t for t in _TOOLS if t[0] == key)
@@ -250,14 +307,42 @@ def _get_default_font_size():
 	return 13 if PLATFORM == 'Mac' else 9
 
 
-def _apply_font_size(size_pt):
-	from PyQt5.QtWidgets import QApplication
+def _apply_font_settings(size_pt=None, family=None):
+	"""Apply font size and/or family. Uses QSS to override Theme.css."""
 	app = QApplication.instance()
 	if app is None:
 		return
-	font = app.font()
-	font.setPointSize(size_pt)
-	app.setFont(font)
+	user_settings = load_json(_SETTINGS_JSON, default={})
+	if size_pt is None:
+		size_pt = user_settings.get('font_size')
+	if family is None:
+		family = user_settings.get('font_family', '')
+
+	# Build QSS override that takes precedence over Theme.css font-size
+	current = app.styleSheet()
+	marker = '/* FONT_SETTINGS_START */'
+	end_marker = '/* FONT_SETTINGS_END */'
+	if marker in current:
+		before = current[:current.index(marker)]
+		after_end = current.find(end_marker)
+		if after_end >= 0:
+			after = current[after_end + len(end_marker):]
+		else:
+			after = ''
+		current = before + after
+
+	parts = []
+	if size_pt:
+		parts.append('font-size: %dpt;' % size_pt)
+	if family:
+		parts.append('font-family: "%s";' % family)
+
+	if parts:
+		rule = '* { %s }' % ' '.join(parts)
+		new_sheet = current + '\n' + marker + '\n' + rule + '\n' + end_marker
+	else:
+		new_sheet = current
+	app.setStyleSheet(new_sheet)
 
 
 def _get_pane_info(pane):
@@ -325,16 +410,13 @@ class CloseSettings(DirectoryPaneCommand):
 
 
 class InitSettingsListener(DirectoryPaneListener):
-	_font_applied = False
+	_applied = False
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		if not InitSettingsListener._font_applied:
-			InitSettingsListener._font_applied = True
-			user_settings = load_json(_SETTINGS_JSON, default={})
-			font_size = user_settings.get('font_size')
-			if font_size is not None:
-				_apply_font_size(font_size)
+		if not InitSettingsListener._applied:
+			InitSettingsListener._applied = True
+			_apply_font_settings()
 
 
 class SettingsModeListener(DirectoryPaneListener):
@@ -391,7 +473,7 @@ def _deactivate_settings(pane):
 	panel = state['panel']
 	if panel._save_timer.isActive():
 		panel._save_timer.stop()
-		panel._flush_font_size()
+		panel._flush_font_settings()
 
 	@run_in_main_thread
 	def _do_deactivate():
