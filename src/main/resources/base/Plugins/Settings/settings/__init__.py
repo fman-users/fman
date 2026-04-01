@@ -42,6 +42,36 @@ def _set_checkbox_silent(cb, value):
 	cb.blockSignals(False)
 
 
+def _discover_themes():
+	"""Find all available themes from FmanAlternativeColors or fallback."""
+	try:
+		from alternative_colors import themes
+		return sorted(themes.keys())
+	except ImportError:
+		pass
+	return ['Default']
+
+
+def _get_active_theme_name():
+	"""Get the currently active theme name."""
+	try:
+		from alternative_colors import current_theme
+		return current_theme or 'Default'
+	except ImportError:
+		pass
+	return 'Default'
+
+
+def _activate_theme_by_name(name):
+	"""Switch to a theme by name using FmanAlternativeColors."""
+	try:
+		from alternative_colors import activate_theme
+		activate_theme(name)
+		return
+	except ImportError:
+		pass
+
+
 class SettingsPanel(QWidget):
 
 	def __init__(self, pane, parent=None):
@@ -171,9 +201,11 @@ class SettingsPanel(QWidget):
 		row = QHBoxLayout()
 		row.addWidget(QLabel('Theme'))
 		row.addStretch()
-		theme_label = QLabel('Dark (built-in)')
-		theme_label.setStyleSheet('QLabel { color: #666; }')
-		row.addWidget(theme_label)
+		self._theme_combo = QComboBox()
+		self._theme_combo.setMinimumWidth(120)
+		self._populate_themes()
+		self._theme_combo.currentTextChanged.connect(self._on_theme_changed)
+		row.addWidget(self._theme_combo)
 		edit_theme_btn = QPushButton('Edit...')
 		edit_theme_btn.setFixedWidth(60)
 		edit_theme_btn.clicked.connect(self._on_edit_theme)
@@ -226,6 +258,21 @@ class SettingsPanel(QWidget):
 			self._tool_inputs[key] = inp
 
 		self._add_separator()
+
+	def _populate_themes(self):
+		self._theme_combo.blockSignals(True)
+		self._theme_combo.clear()
+		themes = _discover_themes()
+		current = _get_active_theme_name()
+		for name in themes:
+			self._theme_combo.addItem(name)
+		idx = self._theme_combo.findText(current)
+		if idx >= 0:
+			self._theme_combo.setCurrentIndex(idx)
+		self._theme_combo.blockSignals(False)
+
+	def _on_theme_changed(self, name):
+		_activate_theme_by_name(name)
 
 	def _on_edit_theme(self):
 		if self._pane in _active_settings:
