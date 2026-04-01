@@ -10,9 +10,24 @@ import os
 
 
 _SETTINGS_EXIT_COMMANDS = frozenset(('switch_panes', 'go_to'))
+_SETTINGS_SYNC_COMMANDS = frozenset(('toggle_hidden_files',
+									  'toggle_parent_dir_entry'))
+_CORE_SETTINGS_JSON = 'Core Settings.json'
+_SETTINGS_JSON = 'Settings.json'
+_PANES_JSON = 'Panes.json'
+
+_TOOLS = [
+	('editor', 'Editor', 'Not configured', ['{file}']),
+	('terminal', 'Terminal', 'System default', ['{curr_dir}']),
+	('native_file_manager', 'File manager', 'System default', ['{curr_dir}']),
+]
 
 
-# --- Settings Panel Widget ---
+def _set_checkbox_silent(cb, value):
+	cb.blockSignals(True)
+	cb.setChecked(value)
+	cb.blockSignals(False)
+
 
 class SettingsPanel(QWidget):
 
@@ -24,6 +39,7 @@ class SettingsPanel(QWidget):
 		self._save_timer.setInterval(500)
 		self._save_timer.timeout.connect(self._flush_font_size)
 		self._pending_font_size = None
+		self._tool_inputs = {}
 		self._init_ui()
 
 	def _init_ui(self):
@@ -34,7 +50,6 @@ class SettingsPanel(QWidget):
 		outer.setContentsMargins(0, 0, 0, 0)
 		outer.setSpacing(0)
 
-		# Header
 		header = QLabel('Settings')
 		header.setStyleSheet(
 			'QLabel { padding: 8px 12px; font-weight: bold; font-size: 14px; '
@@ -42,7 +57,6 @@ class SettingsPanel(QWidget):
 		)
 		outer.addWidget(header)
 
-		# Scrollable content
 		scroll = QScrollArea()
 		scroll.setWidgetResizable(True)
 		scroll.setFrameShape(QFrame.NoFrame)
@@ -65,16 +79,14 @@ class SettingsPanel(QWidget):
 
 	def refresh(self):
 		pane_info = _get_pane_info(self._pane)
-		self._hidden_files_cb.blockSignals(True)
-		self._hidden_files_cb.setChecked(
+		_set_checkbox_silent(
+			self._hidden_files_cb,
 			pane_info.get('show_hidden_files', False)
 		)
-		self._hidden_files_cb.blockSignals(False)
-		self._parent_dir_cb.blockSignals(True)
-		self._parent_dir_cb.setChecked(
+		_set_checkbox_silent(
+			self._parent_dir_cb,
 			pane_info.get('show_parent_dir_entry', False)
 		)
-		self._parent_dir_cb.blockSignals(False)
 
 	def _add_section_header(self, title):
 		label = QLabel(title)
@@ -91,12 +103,9 @@ class SettingsPanel(QWidget):
 		line.setStyleSheet('QFrame { color: #3e3e3e; }')
 		self._layout.addWidget(line)
 
-	# --- Display section ---
-
 	def _build_display_section(self):
 		self._add_section_header('Display')
 
-		# Font size
 		row = QHBoxLayout()
 		row.addWidget(QLabel('Font size'))
 		row.addStretch()
@@ -109,7 +118,6 @@ class SettingsPanel(QWidget):
 		row.addWidget(self._font_size_spin)
 		self._layout.addLayout(row)
 
-		# Theme
 		row = QHBoxLayout()
 		row.addWidget(QLabel('Theme'))
 		row.addStretch()
@@ -119,8 +127,6 @@ class SettingsPanel(QWidget):
 		self._layout.addLayout(row)
 
 		self._add_separator()
-
-	# --- File list section ---
 
 	def _build_file_list_section(self):
 		self._add_section_header('File List')
@@ -143,56 +149,27 @@ class SettingsPanel(QWidget):
 
 		self._add_separator()
 
-	# --- Tools section ---
-
 	def _build_tools_section(self):
 		self._add_section_header('External Tools')
-		settings = load_json('Core Settings.json', default={})
+		settings = load_json(_CORE_SETTINGS_JSON, default={})
 
-		# Editor
-		editor_args = settings.get('editor', {}).get('args', [])
-		row = QHBoxLayout()
-		row.addWidget(QLabel('Editor'))
-		self._editor_input = QLineEdit()
-		self._editor_input.setPlaceholderText('Not configured')
-		self._editor_input.setText(_get_tool_display_name(editor_args))
-		self._editor_input.setReadOnly(True)
-		row.addWidget(self._editor_input)
-		browse_btn = QPushButton('Browse...')
-		browse_btn.setFixedWidth(80)
-		browse_btn.clicked.connect(self._on_browse_editor)
-		row.addWidget(browse_btn)
-		self._layout.addLayout(row)
-
-		# Terminal
-		terminal_args = settings.get('terminal', {}).get('args', [])
-		row = QHBoxLayout()
-		row.addWidget(QLabel('Terminal'))
-		self._terminal_input = QLineEdit()
-		self._terminal_input.setPlaceholderText('System default')
-		self._terminal_input.setText(_get_tool_display_name(terminal_args))
-		self._terminal_input.setReadOnly(True)
-		row.addWidget(self._terminal_input)
-		browse_btn = QPushButton('Browse...')
-		browse_btn.setFixedWidth(80)
-		browse_btn.clicked.connect(self._on_browse_terminal)
-		row.addWidget(browse_btn)
-		self._layout.addLayout(row)
-
-		# Native file manager
-		fm_args = settings.get('native_file_manager', {}).get('args', [])
-		row = QHBoxLayout()
-		row.addWidget(QLabel('File manager'))
-		self._fm_input = QLineEdit()
-		self._fm_input.setPlaceholderText('System default')
-		self._fm_input.setText(_get_tool_display_name(fm_args))
-		self._fm_input.setReadOnly(True)
-		row.addWidget(self._fm_input)
-		browse_btn = QPushButton('Browse...')
-		browse_btn.setFixedWidth(80)
-		browse_btn.clicked.connect(self._on_browse_file_manager)
-		row.addWidget(browse_btn)
-		self._layout.addLayout(row)
+		for key, label, placeholder, _extra_args in _TOOLS:
+			args = settings.get(key, {}).get('args', [])
+			row = QHBoxLayout()
+			row.addWidget(QLabel(label))
+			inp = QLineEdit()
+			inp.setPlaceholderText(placeholder)
+			inp.setText(_get_tool_display_name(args))
+			inp.setReadOnly(True)
+			row.addWidget(inp)
+			browse_btn = QPushButton('Browse...')
+			browse_btn.setFixedWidth(80)
+			browse_btn.clicked.connect(
+				lambda _checked=False, k=key: self._on_browse_tool(k)
+			)
+			row.addWidget(browse_btn)
+			self._layout.addLayout(row)
+			self._tool_inputs[key] = inp
 
 		self._add_separator()
 
@@ -200,25 +177,22 @@ class SettingsPanel(QWidget):
 
 	def _on_hidden_files_toggled(self, _checked):
 		self._pane.run_command('toggle_hidden_files')
-		# Re-read actual state and sync checkbox (blocks signal to avoid loop)
 		pane_info = _get_pane_info(self._pane)
-		self._hidden_files_cb.blockSignals(True)
-		self._hidden_files_cb.setChecked(
+		_set_checkbox_silent(
+			self._hidden_files_cb,
 			pane_info.get('show_hidden_files', False)
 		)
-		self._hidden_files_cb.blockSignals(False)
 
 	def _on_parent_dir_toggled(self, _checked):
 		self._pane.run_command('toggle_parent_dir_entry')
 		pane_info = _get_pane_info(self._pane)
-		self._parent_dir_cb.blockSignals(True)
-		self._parent_dir_cb.setChecked(
+		_set_checkbox_silent(
+			self._parent_dir_cb,
 			pane_info.get('show_parent_dir_entry', False)
 		)
-		self._parent_dir_cb.blockSignals(False)
 
 	def _get_font_size(self):
-		user_settings = load_json('Settings.json', default={})
+		user_settings = load_json(_SETTINGS_JSON, default={})
 		return user_settings.get('font_size', _get_default_font_size())
 
 	def _on_font_size_changed(self, value):
@@ -228,28 +202,18 @@ class SettingsPanel(QWidget):
 
 	def _flush_font_size(self):
 		if self._pending_font_size is not None:
-			user_settings = load_json('Settings.json', default={})
+			user_settings = load_json(_SETTINGS_JSON, default={})
 			user_settings['font_size'] = self._pending_font_size
-			save_json('Settings.json')
+			save_json(_SETTINGS_JSON)
 			self._pending_font_size = None
 
-	def _on_browse_editor(self):
-		path = self._browse_for_app('Select Editor')
+	def _on_browse_tool(self, key):
+		tool_def = next(t for t in _TOOLS if t[0] == key)
+		_, label, _, extra_args = tool_def
+		path = self._browse_for_app('Select %s' % label)
 		if path:
-			self._editor_input.setText(_get_tool_display_name_from_path(path))
-			self._save_tool_setting('editor', path, ['{file}'])
-
-	def _on_browse_terminal(self):
-		path = self._browse_for_app('Select Terminal')
-		if path:
-			self._terminal_input.setText(_get_tool_display_name_from_path(path))
-			self._save_tool_setting('terminal', path, ['{curr_dir}'])
-
-	def _on_browse_file_manager(self):
-		path = self._browse_for_app('Select File Manager')
-		if path:
-			self._fm_input.setText(_get_tool_display_name_from_path(path))
-			self._save_tool_setting('native_file_manager', path, ['{curr_dir}'])
+			self._tool_inputs[key].setText(_friendly_app_name(path))
+			self._save_tool_setting(key, path, extra_args)
 
 	def _browse_for_app(self, caption):
 		if PLATFORM == 'Mac':
@@ -262,13 +226,13 @@ class SettingsPanel(QWidget):
 		return path
 
 	def _save_tool_setting(self, key, app_path, extra_args):
-		settings = load_json('Core Settings.json', default={})
+		settings = load_json(_CORE_SETTINGS_JSON, default={})
 		if PLATFORM == 'Mac':
 			args = ['/usr/bin/open', '-a', app_path] + extra_args
 		else:
 			args = [app_path] + extra_args
 		settings[key] = {'args': args}
-		save_json('Core Settings.json')
+		save_json(_CORE_SETTINGS_JSON)
 		show_status_message('%s updated.' % key.replace('_', ' ').title(), 3)
 
 
@@ -287,7 +251,7 @@ def _apply_font_size(size_pt):
 
 
 def _get_pane_info(pane):
-	settings = load_json('Panes.json', default=[])
+	settings = load_json(_PANES_JSON, default=[])
 	default = {'show_hidden_files': False, 'show_parent_dir_entry': False}
 	pane_index = pane.window.get_panes().index(pane)
 	for _ in range(pane_index - len(settings) + 1):
@@ -301,10 +265,6 @@ def _get_tool_display_name(args):
 	if PLATFORM == 'Mac' and len(args) >= 3 and args[1] == '-a':
 		return _friendly_app_name(args[2])
 	return args[0]
-
-
-def _get_tool_display_name_from_path(path):
-	return _friendly_app_name(path)
 
 
 def _friendly_app_name(path):
@@ -330,7 +290,6 @@ class OpenSettings(DirectoryPaneCommand):
 		if self.pane in _active_settings:
 			_deactivate_settings(self.pane)
 		else:
-			# Close preview if active on this pane before opening settings
 			try:
 				from file_preview import _active_previews, _deactivate_preview
 				if self.pane in _active_previews:
@@ -362,7 +321,7 @@ class InitSettingsListener(DirectoryPaneListener):
 		super().__init__(*args, **kwargs)
 		if not InitSettingsListener._font_applied:
 			InitSettingsListener._font_applied = True
-			user_settings = load_json('Settings.json', default={})
+			user_settings = load_json(_SETTINGS_JSON, default={})
 			font_size = user_settings.get('font_size')
 			if font_size is not None:
 				_apply_font_size(font_size)
@@ -373,9 +332,7 @@ class SettingsModeListener(DirectoryPaneListener):
 		if self.pane in _active_settings:
 			if command_name in _SETTINGS_EXIT_COMMANDS:
 				_deactivate_settings(self.pane)
-			elif command_name in ('toggle_hidden_files',
-								  'toggle_parent_dir_entry'):
-				# External toggle (keyboard shortcut) -- sync checkboxes
+			elif command_name in _SETTINGS_SYNC_COMMANDS:
 				state = _active_settings.get(self.pane)
 				if state:
 					state['panel'].refresh()
@@ -421,7 +378,6 @@ def _deactivate_settings(pane):
 	if not state:
 		return
 	_settings_in_transition.add(pane)
-	# Flush any pending font size save
 	panel = state['panel']
 	if panel._save_timer.isActive():
 		panel._save_timer.stop()
