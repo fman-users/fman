@@ -523,7 +523,7 @@ class MainWindow(QMainWindow):
 			right_margin = self.width() - pos_x - overlay.width()
 			if right_margin / self.width() < 0.1:
 				pos_x = 0.9 * self.width() - overlay.width()
-		overlay.move(pos_x, pos_y)
+		overlay.move(int(pos_x), int(pos_y))
 	def saveState(self, version=0):
 		self_state = super().saveState(version)
 		splitter_state = self._splitter.saveState()

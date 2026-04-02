@@ -71,7 +71,7 @@ class DevelopmentApplicationContext(ApplicationContext):
 		# Overwritten by FrozenApplicationContext below.
 		pass
 	def _load_plugins(self):
-		fman.FMAN_VERSION = self.fman_version
+		vitraj.FMAN_VERSION = self.fman_version
 		plugin_dirs = find_plugin_dirs(
 			self.get_resource('Plugins'),
 			join(DATA_DIRECTORY, 'Plugins', 'Third-party'),
