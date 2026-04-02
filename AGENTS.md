@@ -1,19 +1,19 @@
-# AI Agent Instructions for fman
+# AI Agent Instructions for vitraj
 
 ## Project overview
 
-fman is a cross-platform dual-pane file manager built with Python, PyQt5, and the fbs build system. It supports macOS, Windows, and Linux.
+vitraj (formerly fman) is a cross-platform dual-pane file manager built with Python, PyQt5, and the fbs build system. It supports macOS, Windows, and Linux.
 
 ## Architecture
 
 ```
 src/
   main/
-    python/fman/              # Core framework (model, view, controller, plugins)
-    resources/base/Plugins/   # Core plugin (commands, file systems, preview)
-  build/python/build_impl/    # Platform-specific build/freeze scripts
-  integrationtest/            # Integration tests
-requirements/                 # Per-platform dependency files
+    python/vitraj/              # Core framework (model, view, controller, plugins)
+    resources/base/Plugins/     # Core plugin (commands, file systems, preview)
+  build/python/build_impl/      # Platform-specific build/freeze scripts
+  integrationtest/              # Integration tests
+requirements/                   # Per-platform dependency files
 ```
 
 ### Key patterns
@@ -23,17 +23,18 @@ requirements/                 # Per-platform dependency files
 - **Thread safety**: Model mutations happen in a single worker thread. GUI updates use `@run_in_main_thread` decorator. Never call Qt widget methods from background threads.
 - **Filters**: Simple callables `filter(url) -> bool` added/removed via `pane._add_filter()` / `pane._remove_filter()`. See `ToggleHiddenFiles` as the canonical example.
 - **Settings**: JSON files loaded via `load_json()` / `save_json()`. Per-pane settings stored in `Panes.json`.
+- **PanelManager**: Centralized panel lifecycle in `MainWindow`. Plugins use `window.activate_panel(pane, widget, panel_id)` / `window.deactivate_panel(pane)` instead of manipulating the splitter directly. Only one panel active per pane; activating a new panel auto-deactivates the previous one.
 
 ### Key files
 
 | File | Purpose |
 |------|---------|
-| `src/main/python/fman/__init__.py` | Public API: DirectoryPane, DirectoryPaneCommand, DirectoryPaneListener, Window |
-| `src/main/python/fman/impl/widgets.py` | MainWindow, DirectoryPaneWidget, Splitter |
-| `src/main/python/fman/impl/model/model.py` | File list model with worker thread |
-| `src/main/python/fman/impl/model/__init__.py` | SortedFileSystemModel proxy |
-| `src/main/python/fman/impl/view/__init__.py` | FileListView (QTableView subclass) |
-| `src/main/python/fman/impl/controller.py` | Keyboard shortcut dispatch |
+| `src/main/python/vitraj/__init__.py` | Public API: DirectoryPane, DirectoryPaneCommand, DirectoryPaneListener, Window |
+| `src/main/python/vitraj/impl/widgets.py` | MainWindow, PanelManager, DirectoryPaneWidget, Splitter |
+| `src/main/python/vitraj/impl/model/model.py` | File list model with worker thread |
+| `src/main/python/vitraj/impl/model/__init__.py` | SortedFileSystemModel proxy |
+| `src/main/python/vitraj/impl/view/__init__.py` | FileListView (QTableView subclass) |
+| `src/main/python/vitraj/impl/controller.py` | Keyboard shortcut dispatch |
 | `src/main/resources/base/Plugins/Core/core/commands/__init__.py` | All commands and listeners |
 | `src/main/resources/base/Plugins/Core/core/fs/local/__init__.py` | Local filesystem implementation |
 | `src/main/resources/base/Plugins/Core/Key Bindings.json` | Cross-platform key bindings |
@@ -67,7 +68,7 @@ Expected: 461 tests, 2 pre-existing failures in `test_zip.py` (dict ordering wit
 ```bash
 pip install -Ur requirements/mac.txt
 python build.py clean && python build.py freeze
-# Output: target/fman.app (~120MB, ad-hoc signed)
+# Output: target/vitraj.app (~120MB, ad-hoc signed)
 ```
 
 The freeze process: PyInstaller bundles Python + deps -> platform cleanup strips unused Qt/boto3 -> ad-hoc codesign for TCC compliance.
@@ -82,7 +83,7 @@ Plugins are directories containing a Python package + optional JSON/CSS/TTF file
 2. **Third-party**: `DATA_DIRECTORY/Plugins/Third-party/`
 3. **User**: `DATA_DIRECTORY/Plugins/User/`
 
-Where `DATA_DIRECTORY` is `~/Library/Application Support/fman` (Mac), `%APPDATA%/fman` (Windows), `~/.config/fman` (Linux).
+Where `DATA_DIRECTORY` is `~/Library/Application Support/vitraj` (Mac), `%APPDATA%/vitraj` (Windows), `~/.config/vitraj` (Linux).
 
 ### Plugin directory structure
 
@@ -123,14 +124,14 @@ Class name → command name: `MyCommand` → `my_command` (CamelCase to snake_ca
 
 Copy the plugin directory to `DATA_DIRECTORY/Plugins/Third-party/`:
 ```bash
-cp -r "My Plugin" "~/Library/Application Support/fman/Plugins/Third-party/"
+cp -r "My Plugin" "~/Library/Application Support/vitraj/Plugins/Third-party/"
 ```
 
 ### Plugin lifecycle
 
 - `load()`: sys.path extended, packages imported, classes registered, CSS/fonts loaded
 - `unload()`: All registrations reversed in LIFO order, sys.path restored
-- Error handling: Plugin errors are caught and reported without crashing fman
+- Error handling: Plugin errors are caught and reported without crashing vitraj
 
 ## Common tasks
 
@@ -146,16 +147,36 @@ cp -r "My Plugin" "~/Library/Application Support/fman/Plugins/Third-party/"
 2. The handler receives `(widget, path)` — use `widget.show_image_pixmap(pixmap, info)` for images
 3. See `File Preview PDF` plugin for a complete example
 
-### Pane-swap panel pattern
+### Adding a panel (PanelManager)
 
-Settings, Theme Editor, and File Preview all use the same pattern to replace the opposite pane:
+The PanelManager in `MainWindow` handles all panel lifecycle. To add a new panel:
 
-1. Get the other pane's widget via `panes[other_index]._widget`
-2. Hide it, insert your panel at the same splitter index
-3. Store `{'panel', 'target_widget', 'splitter_sizes'}` state
-4. On deactivate: hide panel, show target widget, restore splitter sizes, `deleteLater()`
-5. Use a `_in_transition` set guard to prevent double-press race conditions
-6. Add mutual exclusion: close other panels before opening yours (`try/except ImportError`)
+1. Create a panel widget class (extends `QWidget`)
+2. In your command's `__call__`:
+   ```python
+   _PANEL_ID = 'my_panel'
+   w = self.pane.window
+   if w.is_panel_active(self.pane, _PANEL_ID):
+       w.deactivate_panel(self.pane)
+   else:
+       panel = MyPanel(self.pane)
+       w.activate_panel(self.pane, panel, _PANEL_ID)
+   ```
+3. `activate_panel` auto-closes any other active panel (no mutual exclusion code needed)
+4. `PanelModeListener` in Core auto-closes panels on `switch_panes`/`go_to`
+5. For cleanup before deactivation (e.g., flushing timers), check `get_active_panel` first:
+   ```python
+   active = pane.window.get_active_panel(pane)
+   if active and active[0] == _PANEL_ID:
+       active[1].flush()  # your cleanup
+       pane.window.deactivate_panel(pane)
+   ```
+
+**Window panel API:**
+- `window.activate_panel(pane, widget, panel_id)` → `bool`
+- `window.deactivate_panel(pane)` → `panel_id` or `None`
+- `window.get_active_panel(pane)` → `(panel_id, widget)` or `None`
+- `window.is_panel_active(pane, panel_id=None)` → `bool`
 
 ### Adding a new filter
 
@@ -165,28 +186,33 @@ Follow the `ToggleHiddenFiles` / `_hidden_file_filter` pattern:
 3. Create an Init listener to set up filter state on startup
 4. Store settings in `Panes.json` via `_get_pane_info(pane)`
 
+Note: `".."` parent dir entries are always passed through filters at the model level (`Model._accepts`).
+
 ### Adding a setting to the Settings panel
 
 1. Add UI widget in `SettingsPanel._build_*_section()` in the Settings plugin
 2. Connect to existing commands via `self._pane.run_command('command_name')`
 3. For checkboxes that sync with external state: re-read actual state after command, use `blockSignals` to prevent loops
 4. The Settings panel's "Edit..." button opens the Theme Editor via `edit_theme` command
+5. The event filter forwards Cmd+P/Cmd+Shift+P to the file pane (allows Ctrl+A/C/V/X/Z through)
 
 ### Theme customization
 
 - Custom themes are stored in `Custom Theme.json` (active theme) and `Saved Themes.json` (named presets)
 - Theme files use `.fman-theme` extension: `{"fman_theme": 1, "name": "...", "colors": {"key": "#hex"}}`
 - Colors are applied via QPalette updates + QSS overrides (marker-delimited block in the app stylesheet)
-- `_THEME_ELEMENTS` defines all 20 themeable color keys with their defaults from `styles.qss`
-- `InitThemeListener` applies saved custom theme on startup
+- `_THEME_ELEMENTS` defines all 21 themeable color keys (including `alternate_bg`) with defaults from `styles.qss`
+- `InitThemeListener` applies saved custom theme on startup (deferred 500ms + retry for plugin compatibility)
+- Panels use `Qt.WA_StyledBackground` to inherit theme colors from QSS `*` rules
+- The Settings panel integrates with FmanAlternativeColors plugin for theme switching
 
 ## Important constraints
 
 - **Python 3.9+** minimum, tested up to 3.14. Do not use features removed after 3.9.
 - **PyQt5 5.15.x** — not PyQt6. Qt5 API only.
 - **Python 3.14 gotchas**: No implicit float-to-int in Qt calls (use `int()`), no `traceback._some_str`, `TracebackException.exc_type` is read-only.
-- **Cross-platform**: Test changes against macOS, Windows, and Linux code paths. Platform checks use `fman.PLATFORM` ('Mac', 'Windows', 'Linux').
-- **Thread safety**: Widget manipulation must happen on the main thread. Use `@run_in_main_thread` from `fman.impl.util.qt.thread`. Model operations run in the worker thread.
+- **Cross-platform**: Test changes against macOS, Windows, and Linux code paths. Platform checks use `vitraj.PLATFORM` ('Mac', 'Windows', 'Linux').
+- **Thread safety**: Widget manipulation must happen on the main thread. Use `@run_in_main_thread` from `vitraj.impl.util.qt.thread`. Model operations run in the worker thread.
 - **fbs build system**: PyInstaller spec is auto-generated by fbs. Add hidden imports to `src/build/settings/base.json`, not to the spec file directly.
 - **macOS TCC**: Add `NS*UsageDescription` keys to `src/build/settings/mac.json` `info_plist_extra` for folder access.
 - **No unnecessary dependencies**: Prefer PyQt5 built-in capabilities. Use `try/except ImportError` for optional deps (PyMuPDF, Pillow) so the app works without them.
