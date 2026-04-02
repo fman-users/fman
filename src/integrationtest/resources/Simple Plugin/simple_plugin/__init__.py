@@ -1,5 +1,5 @@
-from fman import ApplicationCommand, DirectoryPaneCommand, DirectoryPaneListener
-from fman.fs import FileSystem, Column
+from vitraj import ApplicationCommand, DirectoryPaneCommand, DirectoryPaneListener
+from vitraj.fs import FileSystem, Column
 
 class TestCommand(ApplicationCommand):
 	RAN = False

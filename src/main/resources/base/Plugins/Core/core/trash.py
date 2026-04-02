@@ -1,5 +1,5 @@
 from errno import EINVAL
-from fman import PLATFORM
+from vitraj import PLATFORM
 from os import strerror
 
 if PLATFORM == 'Mac':

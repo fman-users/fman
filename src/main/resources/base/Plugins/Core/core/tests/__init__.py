@@ -1,7 +1,7 @@
 from core import LocalFileSystem
-from fman import Task
-from fman.fs import FileSystem
-from fman.url import splitscheme, basename
+from vitraj import Task
+from vitraj.fs import FileSystem
+from vitraj.url import splitscheme, basename
 
 class StubUI:
 	def __init__(self, test_case):

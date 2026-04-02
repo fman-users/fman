@@ -1,10 +1,10 @@
-from fman.url import dirname
+from vitraj.url import dirname
 from os import listdir, strerror
 from os.path import join
 from pathlib import PurePosixPath
 
 import errno
-import fman.fs
+import vitraj.fs
 
 def strformat_dict_values(dict_, replacements):
 	result = {}
@@ -34,7 +34,7 @@ def parent(path):
 	result = str(PurePosixPath(path).parent) if path else ''
 	return '' if result == '.' else result
 
-def is_parent(dir_url, file_url, fs=fman.fs):
+def is_parent(dir_url, file_url, fs=vitraj.fs):
 	for parent_url in _iter_parents(file_url):
 		try:
 			if fs.samefile(parent_url, dir_url):

@@ -1,11 +1,11 @@
 {
-	"app_name": "fman",
+	"app_name": "vitraj",
 	"version": "1.7.4-SNAPSHOT",
 	"author": "Michael Herrmann",
 	"author_email": "michael+removethisifyouarehuman@herrmann.io",
 	"description": "A modern file manager for power users. Beautiful, fast and extensible",
 	"url": "https://fman.io",
-	"main_module": "src/main/python/fman/main.py",
+	"main_module": "src/main/python/vitraj/main.py",
 	"freeze_dir": "target/${app_name}",
 	"test_dirs": [
 		"src/main/resources/base/Plugins/Core"

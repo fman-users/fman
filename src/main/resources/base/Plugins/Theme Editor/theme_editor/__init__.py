@@ -1,12 +1,12 @@
 """
-Theme Editor - visual theme customization for fman.
+Theme Editor - visual theme customization for vitraj.
 
 Extends the Settings plugin with a theme editor sub-panel. Opens from
 the Settings panel or via Command Palette ("Edit theme").
 Uses color pickers to style all themeable elements with live preview.
 Supports saving named themes and export/import as .fman-theme files.
 """
-from fman import DirectoryPaneCommand, DirectoryPaneListener, load_json, \
+from vitraj import DirectoryPaneCommand, DirectoryPaneListener, load_json, \
 	save_json, show_status_message, show_alert, show_prompt, YES, NO
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QColor, QPalette
