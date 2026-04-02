@@ -25,6 +25,7 @@ _THEME_ELEMENTS = [
 		'items': [
 			('window_bg', 'Window', '#2b2b2b'),
 			('base_bg', 'File list', '#272822'),
+			('alternate_bg', 'File list (alternate row)', '#272822'),
 			('header_bg_top', 'Column header (top)', '#363731'),
 			('header_bg_bottom', 'Column header (bottom)', '#272822'),
 			('status_bar_bg_top', 'Status bar (top)', '#5b5b5b'),
@@ -210,6 +211,7 @@ class ThemePreview(QFrame):
 		)
 
 		base_bg = c.get('base_bg', _DEFAULTS['base_bg'])
+		alt_bg = c.get('alternate_bg', _DEFAULTS['alternate_bg'])
 		cursor_bg = c.get('cursor_bg', _DEFAULTS['cursor_bg'])
 		text_dirs = c.get('text_dirs', _DEFAULTS['text_dirs'])
 		text_secondary = c.get('text_secondary', _DEFAULTS['text_secondary'])
@@ -219,8 +221,15 @@ class ThemePreview(QFrame):
 			'QWidget { background-color: %s; }' % base_bg
 		)
 
-		for label, is_dir, is_selected, is_cursor in self._row_labels:
-			bg = cursor_bg if is_cursor else base_bg
+		for i, (label, is_dir, is_selected, is_cursor) in enumerate(
+			self._row_labels
+		):
+			if is_cursor:
+				bg = cursor_bg
+			elif i % 2:
+				bg = alt_bg
+			else:
+				bg = base_bg
 			if is_selected:
 				fg = selected_color
 			elif is_dir:
@@ -263,6 +272,7 @@ class ThemeEditorPanel(QWidget):
 	def _init_ui(self):
 		self.setMinimumWidth(0)
 		self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+		self.setAttribute(Qt.WA_StyledBackground, True)
 
 		outer = QVBoxLayout()
 		outer.setContentsMargins(0, 0, 0, 0)
@@ -298,8 +308,10 @@ class ThemeEditorPanel(QWidget):
 		scroll.setWidgetResizable(True)
 		scroll.setFrameShape(QFrame.NoFrame)
 		scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+		scroll.setAttribute(Qt.WA_StyledBackground, True)
 
 		content = QWidget()
+		content.setAttribute(Qt.WA_StyledBackground, True)
 		self._grid_layout = QVBoxLayout()
 		self._grid_layout.setContentsMargins(8, 4, 8, 8)
 		self._grid_layout.setSpacing(4)
@@ -632,9 +644,17 @@ def _build_override_qss(c):
 	"""Build QSS rules from custom theme colors."""
 	rules = []
 
+	# Universal background (matches how installed themes like Nord.qss work)
 	rules.append(
-		'QTableView, QDialog, QListView { background-color: %s; }'
-		% c.get('base_bg', _DEFAULTS['base_bg'])
+		'* { background: %s; }'
+		% c.get('window_bg', _DEFAULTS['window_bg'])
+	)
+
+	rules.append(
+		'QTableView, QMessageBox, QDialog, QListView { background-color: %s; '
+		'alternate-background-color: %s; }'
+		% (c.get('base_bg', _DEFAULTS['base_bg']),
+		   c.get('alternate_bg', _DEFAULTS['alternate_bg']))
 	)
 
 	rules.append(
@@ -716,6 +736,18 @@ def _build_override_qss(c):
 		% c.get('quicksearch_selected', _DEFAULTS['quicksearch_selected'])
 	)
 
+	# Overlay and filter bar
+	rules.append(
+		'Overlay { background-color: %s; border: 1px solid %s; }'
+		% (c.get('base_bg', _DEFAULTS['base_bg']),
+		   c.get('input_border', _DEFAULTS['input_border']))
+	)
+	rules.append(
+		'FilterBar { background-color: %s; border: 1px solid %s; }'
+		% (c.get('base_bg', _DEFAULTS['base_bg']),
+		   c.get('input_border', _DEFAULTS['input_border']))
+	)
+
 	return '\n'.join(rules)
 
 
@@ -768,18 +800,37 @@ class CloseThemeEditor(DirectoryPaneCommand):
 
 
 class InitThemeListener(DirectoryPaneListener):
-	"""Apply saved custom theme on startup."""
+	"""Apply saved custom theme on startup, deferred to run after all plugins."""
 	_applied = False
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		if not InitThemeListener._applied:
 			InitThemeListener._applied = True
-			custom = _load_custom_theme()
-			if custom:
-				colors = dict(_DEFAULTS)
-				colors.update(custom)
-				_apply_theme_to_app(colors)
+			# Defer so we run AFTER FmanAlternativeColors' delayed_init.
+			# Use 500ms + retry to handle slow startups.
+			from PyQt5.QtCore import QTimer
+			QTimer.singleShot(500, lambda: _apply_saved_custom_theme(0))
+
+
+def _apply_saved_custom_theme(attempt):
+	# Wait for FmanAlternativeColors to finish its delayed_init
+	try:
+		from alternative_colors import delayed_init_started
+		if not delayed_init_started and attempt < 5:
+			from PyQt5.QtCore import QTimer
+			QTimer.singleShot(300, lambda: _apply_saved_custom_theme(attempt + 1))
+			return
+	except ImportError:
+		pass
+	custom = _load_custom_theme()
+	non_default = _get_non_default_colors(
+		dict(_DEFAULTS, **custom)
+	) if custom else {}
+	if non_default:
+		colors = dict(_DEFAULTS)
+		colors.update(custom)
+		_apply_theme_to_app(colors)
 
 
 class ThemeEditorModeListener(DirectoryPaneListener):

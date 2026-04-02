@@ -315,6 +315,20 @@ class TogglePreview(DirectoryPaneCommand):
 		if self.pane in _active_previews:
 			_deactivate_preview(self.pane)
 		else:
+			# Close settings or theme editor if active
+			try:
+				from settings import _active_settings, _deactivate_settings
+				if self.pane in _active_settings:
+					_deactivate_settings(self.pane)
+			except ImportError:
+				pass
+			try:
+				from theme_editor import _active_theme_editors, \
+					_deactivate_theme_editor
+				if self.pane in _active_theme_editors:
+					_deactivate_theme_editor(self.pane)
+			except ImportError:
+				pass
 			_activate_preview(self.pane)
 
 	def is_visible(self):
