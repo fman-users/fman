@@ -139,7 +139,10 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 		self._filters.append(filter_)
 		self.sourceModel().add_filter(filter_)
 	def remove_filter(self, filter_):
-		self._filters.remove(filter_)
+		try:
+			self._filters.remove(filter_)
+		except ValueError:
+			pass
 		self.sourceModel().remove_filter(filter_)
 	def url(self, index):
 		return self.sourceModel().url(self.mapToSource(index))
