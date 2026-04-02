@@ -1,12 +1,12 @@
 {
-	"freeze_dir": "target/fman.app",
+	"freeze_dir": "target/vitraj.app",
 	"core_plugin_in_freeze_dir": "${freeze_dir}/Contents/Resources/Plugins/Core",
 	"hidden_imports": ["pty"],
-	"mac_bundle_identifier": "io.fman.fman",
+	"mac_bundle_identifier": "io.vitraj.vitraj",
 	"appcast_url": "${server_url}/updates/Appcast.xml",
-	"info_plist_extra": "<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsArbitraryLoads</key>\n\t\t<true/>\n\t</dict>\n\t<key>NSDesktopFolderUsageDescription</key>\n\t<string>fman needs access to your Desktop folder to browse and manage files.</string>\n\t<key>NSDocumentsFolderUsageDescription</key>\n\t<string>fman needs access to your Documents folder to browse and manage files.</string>\n\t<key>NSDownloadsFolderUsageDescription</key>\n\t<string>fman needs access to your Downloads folder to browse and manage files.</string>\n\t<key>NSRemovableVolumesUsageDescription</key>\n\t<string>fman needs access to removable volumes to browse and manage files.</string>\n\t<key>NSNetworkVolumesUsageDescription</key>\n\t<string>fman needs access to network volumes to browse and manage files.</string>",
+	"info_plist_extra": "<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsArbitraryLoads</key>\n\t\t<true/>\n\t</dict>\n\t<key>NSDesktopFolderUsageDescription</key>\n\t<string>vitraj needs access to your Desktop folder to browse and manage files.</string>\n\t<key>NSDocumentsFolderUsageDescription</key>\n\t<string>vitraj needs access to your Documents folder to browse and manage files.</string>\n\t<key>NSDownloadsFolderUsageDescription</key>\n\t<string>vitraj needs access to your Downloads folder to browse and manage files.</string>\n\t<key>NSRemovableVolumesUsageDescription</key>\n\t<string>vitraj needs access to removable volumes to browse and manage files.</string>\n\t<key>NSNetworkVolumesUsageDescription</key>\n\t<string>vitraj needs access to network volumes to browse and manage files.</string>",
 	"files_to_filter": [
-		"src/freeze/mac/Contents/SharedSupport/bin/fman"
+		"src/freeze/mac/Contents/SharedSupport/bin/vitraj"
 	],
 	"apple_developer_user": "",
 	"apple_developer_app_pw": ""

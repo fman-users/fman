@@ -2,16 +2,16 @@ from collections import namedtuple, deque
 from core.os_ import is_arch, is_mac
 from core.util import filenotfounderror
 from datetime import datetime
-from fman import PLATFORM, load_json, Task
-from fman.fs import FileSystem
-from fman.url import as_url, splitscheme, as_human_readable, basename
+from vitraj import PLATFORM, load_json, Task
+from vitraj.fs import FileSystem
+from vitraj.url import as_url, splitscheme, as_human_readable, basename
 from io import UnsupportedOperation, FileIO, BufferedReader, TextIOWrapper
 from os.path import join, dirname
 from pathlib import PurePosixPath, Path
 from subprocess import Popen, PIPE, DEVNULL, CalledProcessError
 from tempfile import TemporaryDirectory
 
-import fman.fs
+import vitraj.fs
 import os
 import os.path
 import re
@@ -33,7 +33,7 @@ else:
 		_7ZIP_BINARY += '.exe'
 
 class _7ZipFileSystem(FileSystem):
-	def __init__(self, fs=fman.fs, suffixes=None):
+	def __init__(self, fs=vitraj.fs, suffixes=None):
 		if suffixes is None:
 			suffixes = self._load_suffixes_from_json()
 		super().__init__()
@@ -336,7 +336,7 @@ class Extract(Task):
 			if self._path_in_zip:
 				args.insert(2, self._path_in_zip)
 			_run_7zip(args)
-			# Use fman.fs.move(...) so fman's file:// caches are notified of the
+			# Use vitraj.fs.move(...) so vitraj's file:// caches are notified of the
 			# new file:
 			self._fman_fs.move(
 				join(as_url(tmp_dir.name), self._path_in_zip),

@@ -164,7 +164,7 @@ def _run_altool(args):
 
 @command
 def sign_installer():
-	dmg_path = path('target/fman.dmg')
+	dmg_path = path('target/vitraj.dmg')
 	_run_codesign(dmg_path)
 	_notarize(dmg_path)
 	_staple(dmg_path)
@@ -181,7 +181,7 @@ def upload():
 	for patch_file in glob(path('target/autoupdate/*.delta')):
 		upload_file(patch_file, _UPDATES_DIR)
 	if SETTINGS['release']:
-		upload_installer_to_aws('fman.dmg')
+		upload_installer_to_aws('vitraj.dmg')
 
 def _zip_mac(src_dir, dest_zip):
 	run([

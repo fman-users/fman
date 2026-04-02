@@ -1,5 +1,5 @@
 from core.util import strformat_dict_values
-from fman import load_json, show_alert, show_status_message, PLATFORM
+from vitraj import load_json, show_alert, show_status_message, PLATFORM
 from shutil import which
 from subprocess import Popen, check_output
 

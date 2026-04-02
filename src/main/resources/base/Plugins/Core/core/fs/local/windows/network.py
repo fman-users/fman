@@ -1,6 +1,6 @@
 from core.util import filenotfounderror
-from fman.fs import FileSystem
-from fman.url import as_url
+from vitraj.fs import FileSystem
+from vitraj.url import as_url
 from win32wnet import WNetOpenEnum, WNetEnumResource, error as WNetError, \
 	NETRESOURCE, WNetGetResourceInformation
 

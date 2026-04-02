@@ -1,5 +1,5 @@
-from fman import DirectoryPaneCommand, DirectoryPaneListener
-from fman.url import splitscheme, basename, as_human_readable
+from vitraj import DirectoryPaneCommand, DirectoryPaneListener
+from vitraj.url import splitscheme, basename, as_human_readable
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QFont, QImage
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPlainTextEdit, \

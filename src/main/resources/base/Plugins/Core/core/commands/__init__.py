@@ -7,12 +7,12 @@ from core.os_ import open_terminal_in_directory, open_native_file_manager, \
 from core.util import strformat_dict_values, listdir_absolute, is_parent
 from core.quicksearch_matchers import contains_chars, \
 	contains_chars_after_separator
-from fman import *
-from fman.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
+from vitraj import *
+from vitraj.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
 	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, \
 	FileSystem, prepare_trash, query, makedirs, notify_file_added
-from fman.impl.util import get_user
-from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
+from vitraj.impl.util import get_user
+from vitraj.url import splitscheme, as_url, join, basename, as_human_readable, \
 	dirname, relpath, normalize
 from io import UnsupportedOperation
 from itertools import chain
@@ -26,7 +26,7 @@ from tempfile import TemporaryDirectory
 from urllib.error import URLError
 
 import errno
-import fman.fs
+import vitraj.fs
 import json
 import os
 import os.path
@@ -37,7 +37,7 @@ from .goto import *
 
 class About(ApplicationCommand):
 	def __call__(self):
-		msg = "fman version: " + FMAN_VERSION
+		msg = "vitraj version: " + FMAN_VERSION
 		msg += "\n" + self._get_registration_info()
 		show_alert(msg)
 	def _get_registration_info(self):
@@ -553,7 +553,7 @@ class _TreeCommand(DirectoryPaneCommand):
 		raise NotImplementedError()
 	@classmethod
 	def _confirm_tree_operation(
-		cls, files, dest_dir, src_dir, ui=fman, fs=fman.fs
+		cls, files, dest_dir, src_dir, ui=vitraj, fs=vitraj.fs
 	):
 		if not files:
 			ui.show_alert('No file is selected!')
@@ -1127,7 +1127,7 @@ def _inject_parent_dir_entry(pane):
 		return
 	parent_entry_url = join(current_url, '..')
 	try:
-		from fman.fs import notify_file_added
+		from vitraj.fs import notify_file_added
 		notify_file_added(parent_entry_url)
 	except Exception:
 		pass

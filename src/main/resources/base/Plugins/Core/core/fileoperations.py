@@ -1,14 +1,14 @@
 from core.util import is_parent
-from fman import Task, YES, NO, YES_TO_ALL, NO_TO_ALL, ABORT, OK
-from fman.url import basename, join, dirname, splitscheme, relpath, \
+from vitraj import Task, YES, NO, YES_TO_ALL, NO_TO_ALL, ABORT, OK
+from vitraj.url import basename, join, dirname, splitscheme, relpath, \
 	as_human_readable
 from os.path import pardir
 
-import fman.fs
+import vitraj.fs
 
 class FileTreeOperation(Task):
 	def __init__(
-		self, descr_verb, files, dest_dir, dest_name=None, fs=fman.fs
+		self, descr_verb, files, dest_dir, dest_name=None, fs=vitraj.fs
 	):
 		if dest_name and len(files) > 1:
 			raise ValueError(
