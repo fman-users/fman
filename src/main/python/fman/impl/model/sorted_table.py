@@ -60,5 +60,8 @@ class SortFilterTableModel(TableModel):
 		self._filters.append(filter_)
 		self.update()
 	def remove_filter(self, filter_):
-		self._filters.remove(filter_)
+		try:
+			self._filters.remove(filter_)
+		except ValueError:
+			pass
 		self.update()
