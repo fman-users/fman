@@ -1381,6 +1381,17 @@ class GoForward(DirectoryPaneCommand):
 	def __call__(self):
 		HistoryListener.INSTANCES[self.pane].go_forward()
 
+_PANEL_EXIT_COMMANDS = frozenset(('switch_panes', 'go_to'))
+
+class PanelModeListener(DirectoryPaneListener):
+	"""Auto-close any active panel when navigating away."""
+	def on_command(self, command_name, args):
+		if command_name in _PANEL_EXIT_COMMANDS:
+			if self.pane.window.is_panel_active(self.pane):
+				self.pane.window.deactivate_panel(self.pane)
+		return None
+
+
 class HistoryListener(DirectoryPaneListener):
 
 	INSTANCES = {}

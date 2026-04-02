@@ -1,6 +1,5 @@
 from fman import DirectoryPaneCommand, DirectoryPaneListener, load_json, \
 	save_json, show_status_message, PLATFORM
-from fman.impl.util.qt.thread import run_in_main_thread
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, \
 	QScrollArea, QSizePolicy, QFrame, QPushButton, QCheckBox, \
@@ -9,7 +8,6 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, \
 import os
 
 
-_SETTINGS_EXIT_COMMANDS = frozenset(('switch_panes', 'go_to'))
 _SETTINGS_SYNC_COMMANDS = frozenset(('toggle_hidden_files',
 									  'toggle_parent_dir_entry'))
 _CORE_SETTINGS_JSON = 'Core Settings.json'
@@ -180,9 +178,7 @@ class SettingsPanel(QWidget):
 	# --- Handlers ---
 
 	def _on_edit_theme(self):
-		# Close settings and open theme editor
-		if self._pane in _active_settings:
-			_deactivate_settings(self._pane)
+		_close_settings(self._pane)
 		self._pane.run_command('edit_theme')
 
 	def _on_hidden_files_toggled(self, _checked):
@@ -286,8 +282,7 @@ def _friendly_app_name(path):
 
 # --- Commands and Listeners ---
 
-_active_settings = {}
-_settings_in_transition = set()
+_PANEL_ID = 'settings'
 
 
 class OpenSettings(DirectoryPaneCommand):
@@ -295,18 +290,12 @@ class OpenSettings(DirectoryPaneCommand):
 	aliases = ('Settings', 'Preferences', 'Open settings')
 
 	def __call__(self):
-		if self.pane in _settings_in_transition:
-			return
-		if self.pane in _active_settings:
-			_deactivate_settings(self.pane)
+		w = self.pane.window
+		if w.is_panel_active(self.pane, _PANEL_ID):
+			_close_settings(self.pane)
 		else:
-			try:
-				from file_preview import _active_previews, _deactivate_preview
-				if self.pane in _active_previews:
-					_deactivate_preview(self.pane)
-			except ImportError:
-				pass
-			_activate_settings(self.pane)
+			panel = SettingsPanel(self.pane)
+			w.activate_panel(self.pane, panel, _PANEL_ID)
 
 	def is_visible(self):
 		return len(self.pane.window.get_panes()) >= 2
@@ -317,93 +306,39 @@ class CloseSettings(DirectoryPaneCommand):
 	aliases = ('Close settings',)
 
 	def __call__(self):
-		if self.pane in _active_settings:
-			_deactivate_settings(self.pane)
+		_close_settings(self.pane)
 
 	def is_visible(self):
-		return self.pane in _active_settings
+		return self.pane.window.is_panel_active(self.pane, _PANEL_ID)
 
 
 class InitSettingsListener(DirectoryPaneListener):
-	_font_applied = False
+	_applied = False
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-		if not InitSettingsListener._font_applied:
-			InitSettingsListener._font_applied = True
+		if not InitSettingsListener._applied:
+			InitSettingsListener._applied = True
 			user_settings = load_json(_SETTINGS_JSON, default={})
 			font_size = user_settings.get('font_size')
 			if font_size is not None:
 				_apply_font_size(font_size)
 
 
-class SettingsModeListener(DirectoryPaneListener):
+class SettingsSyncListener(DirectoryPaneListener):
 	def on_command(self, command_name, args):
-		if self.pane in _active_settings:
-			if command_name in _SETTINGS_EXIT_COMMANDS:
-				_deactivate_settings(self.pane)
-			elif command_name in _SETTINGS_SYNC_COMMANDS:
-				state = _active_settings.get(self.pane)
-				if state:
-					state['panel'].refresh()
+		if command_name in _SETTINGS_SYNC_COMMANDS:
+			active = self.pane.window.get_active_panel(self.pane)
+			if active and active[0] == _PANEL_ID:
+				active[1].refresh()
 		return None
 
 
-def _activate_settings(pane):
-	panes = pane.window.get_panes()
-	if len(panes) < 2:
-		return
-	_settings_in_transition.add(pane)
-	this_index = panes.index(pane)
-	other_index = 1 - this_index
-	other_pane = panes[other_index]
-	target_widget = other_pane._widget
-
-	@run_in_main_thread
-	def _do_activate():
-		splitter = target_widget.parentWidget()
-		splitter_index = splitter.indexOf(target_widget)
-		sizes = splitter.sizes()
-
-		panel = SettingsPanel(pane)
-		target_widget.hide()
-		splitter.insertWidget(splitter_index, panel)
-		new_sizes = list(sizes)
-		new_sizes.insert(splitter_index, sizes[splitter_index])
-		new_sizes[splitter_index + 1] = 0
-		splitter.setSizes(new_sizes)
-
-		_active_settings[pane] = {
-			'panel': panel,
-			'target_widget': target_widget,
-			'splitter_sizes': sizes,
-		}
-		_settings_in_transition.discard(pane)
-
-	_do_activate()
-
-
-def _deactivate_settings(pane):
-	state = _active_settings.pop(pane, None)
-	if not state:
-		return
-	_settings_in_transition.add(pane)
-	panel = state['panel']
-	if panel._save_timer.isActive():
-		panel._save_timer.stop()
-		panel._flush_font_size()
-
-	@run_in_main_thread
-	def _do_deactivate():
-		target_widget = state['target_widget']
-		splitter = panel.parentWidget()
-		sizes = state['splitter_sizes']
-		panel.hide()
-		target_widget.show()
-		panel.setParent(None)
-		panel.deleteLater()
-		if splitter and sizes:
-			splitter.setSizes(sizes)
-		_settings_in_transition.discard(pane)
-
-	_do_deactivate()
+def _close_settings(pane):
+	active = pane.window.get_active_panel(pane)
+	if active and active[0] == _PANEL_ID:
+		panel = active[1]
+		if panel._save_timer.isActive():
+			panel._save_timer.stop()
+			panel._flush_font_size()
+		pane.window.deactivate_panel(pane)

@@ -8,7 +8,6 @@ Supports saving named themes and export/import as .fman-theme files.
 """
 from fman import DirectoryPaneCommand, DirectoryPaneListener, load_json, \
 	save_json, show_status_message, show_alert, show_prompt, YES, NO
-from fman.impl.util.qt.thread import run_in_main_thread
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, \
@@ -71,7 +70,6 @@ for _group in _THEME_ELEMENTS:
 		_DEFAULTS[_key] = _default
 
 _THEME_FILE_FILTER = 'fman Theme (*.fman-theme);;JSON (*.json);;All Files (*)'
-_THEME_EXIT_COMMANDS = frozenset(('switch_panes', 'go_to'))
 
 _CUSTOM_THEME_JSON = 'Custom Theme.json'
 _SAVED_THEMES_JSON = 'Saved Themes.json'
@@ -576,8 +574,9 @@ class ThemeEditorPanel(QWidget):
 	# --- Navigation ---
 
 	def _go_back(self):
-		if self._pane in _active_theme_editors:
-			_deactivate_theme_editor(self._pane)
+		w = self._pane.window
+		if w.is_panel_active(self._pane, _PANEL_ID):
+			w.deactivate_panel(self._pane)
 			self._pane.run_command('open_settings')
 
 
@@ -719,10 +718,7 @@ def _build_override_qss(c):
 	return '\n'.join(rules)
 
 
-# --- Commands and panel management ---
-
-_active_theme_editors = {}
-_theme_editor_in_transition = set()
+_PANEL_ID = 'theme_editor'
 
 
 class EditTheme(DirectoryPaneCommand):
@@ -730,26 +726,12 @@ class EditTheme(DirectoryPaneCommand):
 	aliases = ('Edit theme', 'Theme editor', 'Customize theme')
 
 	def __call__(self):
-		if self.pane in _theme_editor_in_transition:
-			return
-		if self.pane in _active_theme_editors:
-			_deactivate_theme_editor(self.pane)
+		w = self.pane.window
+		if w.is_panel_active(self.pane, _PANEL_ID):
+			w.deactivate_panel(self.pane)
 		else:
-			# Close settings panel if open
-			try:
-				from settings import _active_settings, _deactivate_settings
-				if self.pane in _active_settings:
-					_deactivate_settings(self.pane)
-			except ImportError:
-				pass
-			# Close preview if open
-			try:
-				from file_preview import _active_previews, _deactivate_preview
-				if self.pane in _active_previews:
-					_deactivate_preview(self.pane)
-			except ImportError:
-				pass
-			_activate_theme_editor(self.pane)
+			panel = ThemeEditorPanel(self.pane)
+			w.activate_panel(self.pane, panel, _PANEL_ID)
 
 	def is_visible(self):
 		return len(self.pane.window.get_panes()) >= 2
@@ -760,15 +742,15 @@ class CloseThemeEditor(DirectoryPaneCommand):
 	aliases = ('Close theme editor',)
 
 	def __call__(self):
-		if self.pane in _active_theme_editors:
-			_deactivate_theme_editor(self.pane)
+		w = self.pane.window
+		if w.is_panel_active(self.pane, _PANEL_ID):
+			w.deactivate_panel(self.pane)
 
 	def is_visible(self):
-		return self.pane in _active_theme_editors
+		return self.pane.window.is_panel_active(self.pane, _PANEL_ID)
 
 
 class InitThemeListener(DirectoryPaneListener):
-	"""Apply saved custom theme on startup."""
 	_applied = False
 
 	def __init__(self, *args, **kwargs):
@@ -780,68 +762,3 @@ class InitThemeListener(DirectoryPaneListener):
 				colors = dict(_DEFAULTS)
 				colors.update(custom)
 				_apply_theme_to_app(colors)
-
-
-class ThemeEditorModeListener(DirectoryPaneListener):
-	def on_command(self, command_name, args):
-		if self.pane in _active_theme_editors:
-			if command_name in _THEME_EXIT_COMMANDS:
-				_deactivate_theme_editor(self.pane)
-		return None
-
-
-def _activate_theme_editor(pane):
-	panes = pane.window.get_panes()
-	if len(panes) < 2:
-		return
-	_theme_editor_in_transition.add(pane)
-	this_index = panes.index(pane)
-	other_index = 1 - this_index
-	other_pane = panes[other_index]
-	target_widget = other_pane._widget
-
-	@run_in_main_thread
-	def _do_activate():
-		splitter = target_widget.parentWidget()
-		splitter_index = splitter.indexOf(target_widget)
-		sizes = splitter.sizes()
-
-		panel = ThemeEditorPanel(pane)
-		target_widget.hide()
-		splitter.insertWidget(splitter_index, panel)
-		new_sizes = list(sizes)
-		new_sizes.insert(splitter_index, sizes[splitter_index])
-		new_sizes[splitter_index + 1] = 0
-		splitter.setSizes(new_sizes)
-
-		_active_theme_editors[pane] = {
-			'panel': panel,
-			'target_widget': target_widget,
-			'splitter_sizes': sizes,
-		}
-		_theme_editor_in_transition.discard(pane)
-
-	_do_activate()
-
-
-def _deactivate_theme_editor(pane):
-	state = _active_theme_editors.pop(pane, None)
-	if not state:
-		return
-	_theme_editor_in_transition.add(pane)
-
-	@run_in_main_thread
-	def _do_deactivate():
-		target_widget = state['target_widget']
-		panel = state['panel']
-		splitter = panel.parentWidget()
-		sizes = state['splitter_sizes']
-		panel.hide()
-		target_widget.show()
-		panel.setParent(None)
-		panel.deleteLater()
-		if splitter and sizes:
-			splitter.setSizes(sizes)
-		_theme_editor_in_transition.discard(pane)
-
-	_do_deactivate()

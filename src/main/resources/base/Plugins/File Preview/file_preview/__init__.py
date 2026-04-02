@@ -1,6 +1,5 @@
 from fman import DirectoryPaneCommand, DirectoryPaneListener
 from fman.url import splitscheme, basename, as_human_readable
-from fman.impl.util.qt.thread import run_in_main_thread
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QFont, QImage
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPlainTextEdit, \
@@ -299,10 +298,9 @@ class PreviewWidget(QWidget):
 		self._stack.setCurrentIndex(2)
 
 
-# --- Commands and Listeners ---
-
-_active_previews = {}
-_preview_in_transition = set()
+_PANEL_ID = 'preview'
+# Per-pane cursor tracking state (kept separately from PanelManager)
+_cursor_connections = {}
 
 
 class TogglePreview(DirectoryPaneCommand):
@@ -310,12 +308,11 @@ class TogglePreview(DirectoryPaneCommand):
 	aliases = ('Toggle preview', 'Preview file', 'View file')
 
 	def __call__(self):
-		if self.pane in _preview_in_transition:
-			return
-		if self.pane in _active_previews:
-			_deactivate_preview(self.pane)
+		w = self.pane.window
+		if w.is_panel_active(self.pane, _PANEL_ID):
+			_close_preview(self.pane)
 		else:
-			_activate_preview(self.pane)
+			_open_preview(self.pane)
 
 	def is_visible(self):
 		return len(self.pane.window.get_panes()) >= 2
@@ -326,101 +323,51 @@ class ExitPreview(DirectoryPaneCommand):
 	aliases = ('Exit preview', 'Close preview')
 
 	def __call__(self):
-		if self.pane in _active_previews:
-			_deactivate_preview(self.pane)
+		_close_preview(self.pane)
 
 	def is_visible(self):
-		return self.pane in _active_previews
+		return self.pane.window.is_panel_active(self.pane, _PANEL_ID)
 
 
 class PreviewModeListener(DirectoryPaneListener):
 	def on_path_changed(self):
-		if self.pane in _active_previews:
+		w = self.pane.window
+		active = w.get_active_panel(self.pane)
+		if active and active[0] == _PANEL_ID:
 			file_url = self.pane.get_file_under_cursor()
-			state = _active_previews[self.pane]
-			state['preview_widget'].show_preview(file_url)
-
-	def on_command(self, command_name, args):
-		if self.pane in _active_previews:
-			if command_name in ('switch_panes', 'go_to'):
-				_deactivate_preview(self.pane)
-		return None
+			active[1].show_preview(file_url)
 
 
-def _activate_preview(pane):
-	panes = pane.window.get_panes()
-	if len(panes) < 2:
-		return
-	_preview_in_transition.add(pane)
-	this_index = panes.index(pane)
-	other_index = 1 - this_index
-	other_pane = panes[other_index]
-	target_widget = other_pane._widget
+def _open_preview(pane):
 	file_view = pane._widget._file_view
 	file_url = pane.get_file_under_cursor()
+	preview = PreviewWidget()
 
-	@run_in_main_thread
-	def _do_activate():
-		splitter = target_widget.parentWidget()
-		splitter_index = splitter.indexOf(target_widget)
-		sizes = splitter.sizes()
+	def on_cursor_changed(current, _previous):
+		try:
+			url = file_view.model().url(current)
+		except (ValueError, RuntimeError):
+			url = None
+		preview.show_preview(url)
 
-		preview = PreviewWidget()
-		target_widget.hide()
-		splitter.insertWidget(splitter_index, preview)
-		new_sizes = list(sizes)
-		new_sizes.insert(splitter_index, sizes[splitter_index])
-		new_sizes[splitter_index + 1] = 0
-		splitter.setSizes(new_sizes)
-
-		def on_cursor_changed(current, _previous):
-			try:
-				url = file_view.model().url(current)
-			except (ValueError, RuntimeError):
-				url = None
-			preview.show_preview(url)
-
+	ok = pane.window.activate_panel(pane, preview, _PANEL_ID)
+	if ok:
 		file_view.selectionModel().currentRowChanged.connect(on_cursor_changed)
-
-		_active_previews[pane] = {
-			'preview_widget': preview,
-			'target_widget': target_widget,
-			'splitter_sizes': sizes,
-			'on_cursor_changed': on_cursor_changed,
+		_cursor_connections[pane] = {
+			'callback': on_cursor_changed,
 			'file_view': file_view,
 		}
-		_preview_in_transition.discard(pane)
-
 		preview.show_preview(file_url)
 
-	_do_activate()
 
-
-def _deactivate_preview(pane):
-	state = _active_previews.pop(pane, None)
-	if not state:
-		return
-	_preview_in_transition.add(pane)
-
-	@run_in_main_thread
-	def _do_deactivate():
-		file_view = state['file_view']
+def _close_preview(pane):
+	# Disconnect cursor tracking before panel is destroyed
+	conn = _cursor_connections.pop(pane, None)
+	if conn:
 		try:
-			file_view.selectionModel().currentRowChanged.disconnect(
-				state['on_cursor_changed']
+			conn['file_view'].selectionModel().currentRowChanged.disconnect(
+				conn['callback']
 			)
 		except (TypeError, RuntimeError):
 			pass
-		target_widget = state['target_widget']
-		preview = state['preview_widget']
-		splitter = preview.parentWidget()
-		sizes = state['splitter_sizes']
-		preview.hide()
-		target_widget.show()
-		preview.setParent(None)
-		preview.deleteLater()
-		if splitter and sizes:
-			splitter.setSizes(sizes)
-		_preview_in_transition.discard(pane)
-
-	_do_deactivate()
+	pane.window.deactivate_panel(pane)
