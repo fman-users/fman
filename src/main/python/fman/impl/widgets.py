@@ -263,6 +263,88 @@ class FilterBar(QFrame):
 	def _accepts(self, url):
 		return bool(self._filter_re.search(basename(url)))
 
+class PanelManager:
+	"""Manages panel lifecycle for the splitter-swap pattern.
+
+	Centralizes the activate/deactivate logic used by Settings, Theme Editor,
+	and File Preview plugins. Only one panel can be active per source pane.
+	Activating a new panel auto-deactivates the previous one.
+	"""
+
+	def __init__(self):
+		self._active = {}
+		self._in_transition = set()
+
+	def activate(self, pane, panel_widget, panel_id):
+		if pane in self._in_transition:
+			return False
+		panes = pane.window.get_panes()
+		if len(panes) < 2:
+			return False
+		# Auto-deactivate any existing panel for this pane
+		if pane in self._active:
+			self.deactivate(pane)
+		self._in_transition.add(pane)
+		this_index = panes.index(pane)
+		other_index = 1 - this_index
+		other_pane = panes[other_index]
+		target_widget = other_pane._widget
+		splitter_obj = target_widget.parentWidget()
+		splitter_index = splitter_obj.indexOf(target_widget)
+		sizes = splitter_obj.sizes()
+
+		target_widget.hide()
+		splitter_obj.insertWidget(splitter_index, panel_widget)
+		new_sizes = list(sizes)
+		new_sizes.insert(splitter_index, sizes[splitter_index])
+		new_sizes[splitter_index + 1] = 0
+		splitter_obj.setSizes(new_sizes)
+
+		self._active[pane] = {
+			'panel_id': panel_id,
+			'widget': panel_widget,
+			'target_widget': target_widget,
+			'splitter_sizes': sizes,
+		}
+		self._in_transition.discard(pane)
+		return True
+
+	def deactivate(self, pane):
+		state = self._active.pop(pane, None)
+		if not state:
+			return None
+		self._in_transition.add(pane)
+		target_widget = state['target_widget']
+		panel_widget = state['widget']
+		splitter = panel_widget.parentWidget()
+		sizes = state['splitter_sizes']
+		panel_widget.hide()
+		target_widget.show()
+		panel_widget.setParent(None)
+		panel_widget.deleteLater()
+		if splitter and sizes:
+			splitter.setSizes(sizes)
+		self._in_transition.discard(pane)
+		return state['panel_id']
+
+	def get_active(self, pane):
+		state = self._active.get(pane)
+		if state:
+			return state['panel_id'], state['widget']
+		return None
+
+	def is_active(self, pane, panel_id=None):
+		state = self._active.get(pane)
+		if not state:
+			return False
+		if panel_id is not None:
+			return state['panel_id'] == panel_id
+		return True
+
+	def is_in_transition(self, pane):
+		return pane in self._in_transition
+
+
 class MainWindow(QMainWindow):
 
 	shown = pyqtSignal()
@@ -281,6 +363,7 @@ class MainWindow(QMainWindow):
 		self._fs = fs
 		self._null_location = null_location
 		self._panes = []
+		self._panel_manager = PanelManager()
 		self._splitter = Splitter(self)
 		self.setCentralWidget(self._splitter)
 		self._status_bar = QStatusBar(self)
@@ -403,6 +486,16 @@ class MainWindow(QMainWindow):
 		return result
 	def get_panes(self):
 		return self._panes
+	@run_in_main_thread
+	def activate_panel(self, pane, panel_widget, panel_id):
+		return self._panel_manager.activate(pane, panel_widget, panel_id)
+	@run_in_main_thread
+	def deactivate_panel(self, pane):
+		return self._panel_manager.deactivate(pane)
+	def get_active_panel(self, pane):
+		return self._panel_manager.get_active(pane)
+	def is_panel_active(self, pane, panel_id=None):
+		return self._panel_manager.is_active(pane, panel_id)
 	@run_in_main_thread
 	def minimize(self):
 		self.setWindowState(Qt.WindowMinimized)

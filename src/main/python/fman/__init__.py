@@ -173,6 +173,14 @@ class Window:
 		self._panes.append(pane)
 		_get_controller().register_pane(pane_widget, pane)
 		return pane
+	def activate_panel(self, pane, panel_widget, panel_id):
+		return self._widget.activate_panel(pane, panel_widget, panel_id)
+	def deactivate_panel(self, pane):
+		return self._widget.deactivate_panel(pane)
+	def get_active_panel(self, pane):
+		return self._widget.get_active_panel(pane)
+	def is_panel_active(self, pane, panel_id=None):
+		return self._widget.is_panel_active(pane, panel_id)
 
 class DirectoryPaneCommand:
 	def __init__(self, pane):
