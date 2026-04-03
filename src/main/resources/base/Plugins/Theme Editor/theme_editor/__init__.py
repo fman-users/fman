@@ -759,8 +759,8 @@ class EditTheme(DirectoryPaneCommand):
 		if w.is_panel_active(self.pane, _PANEL_ID):
 			w.deactivate_panel(self.pane)
 		else:
-			panel = ThemeEditorPanel(self.pane)
-			w.activate_panel(self.pane, panel, _PANEL_ID)
+			pane = self.pane
+			w.activate_panel(pane, lambda: ThemeEditorPanel(pane), _PANEL_ID)
 
 	def is_visible(self):
 		return len(self.pane.window.get_panes()) >= 2
