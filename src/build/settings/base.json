@@ -54,5 +54,5 @@
 			]
 		}
 	},
-	"hidden_imports": ["requests", "fitz", "pymupdf", "PIL"]
+	"hidden_imports": ["requests", "fitz", "pymupdf", "PIL", "Foundation"]
 }

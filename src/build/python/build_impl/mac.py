@@ -5,7 +5,7 @@ from fbs.cmdline import command
 from fbs.freeze.mac import freeze_mac
 from glob import glob
 from os import remove
-from os.path import basename, join
+from os.path import join
 from shutil import rmtree, move
 from subprocess import run, PIPE, CalledProcessError, SubprocessError
 from time import sleep
@@ -37,15 +37,7 @@ def freeze():
 		path('lib/mac/Sparkle-1.22.0/Sparkle.framework'),
 		path('${freeze_dir}/Contents/Frameworks/Sparkle.framework')
 	)
-	copy_python_library('osxtrash', path('${core_plugin_in_freeze_dir}'))
-	import osxtrash
-	so_name = basename(osxtrash.__file__)
-	# Move the .so to Frameworks (where PyInstaller 6.x sets sys._MEIPASS),
-	# so it's both importable and codesigned:
-	move(
-		path('${core_plugin_in_freeze_dir}/' + so_name),
-		path('${freeze_dir}/Contents/Frameworks')
-	)
+	copy_python_library('send2trash', path('${core_plugin_in_freeze_dir}'))
 	move(
 		path('${core_plugin_in_freeze_dir}/bin/mac/7za'),
 		path('${freeze_dir}/Contents/MacOS')
