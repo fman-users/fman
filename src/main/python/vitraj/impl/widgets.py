@@ -275,13 +275,12 @@ class PanelManager:
 		self._active = {}
 		self._in_transition = set()
 
-	def activate(self, pane, panel_widget, panel_id):
+	def activate(self, pane, panel_or_factory, panel_id):
 		if pane in self._in_transition:
 			return False
 		panes = pane.window.get_panes()
 		if len(panes) < 2:
 			return False
-		# Auto-deactivate any existing panel for this pane
 		if pane in self._active:
 			self.deactivate(pane)
 		self._in_transition.add(pane)
@@ -292,6 +291,12 @@ class PanelManager:
 		splitter_obj = target_widget.parentWidget()
 		splitter_index = splitter_obj.indexOf(target_widget)
 		sizes = splitter_obj.sizes()
+
+		# Create widget on the main thread if a factory was passed
+		if callable(panel_or_factory) and not hasattr(panel_or_factory, 'show'):
+			panel_widget = panel_or_factory()
+		else:
+			panel_widget = panel_or_factory
 
 		target_widget.hide()
 		splitter_obj.insertWidget(splitter_index, panel_widget)

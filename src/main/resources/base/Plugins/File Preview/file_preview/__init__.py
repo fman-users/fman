@@ -341,23 +341,27 @@ class PreviewModeListener(DirectoryPaneListener):
 def _open_preview(pane):
 	file_view = pane._widget._file_view
 	file_url = pane.get_file_under_cursor()
-	preview = PreviewWidget()
 
-	def on_cursor_changed(current, _previous):
-		try:
-			url = file_view.model().url(current)
-		except (ValueError, RuntimeError):
-			url = None
-		preview.show_preview(url)
+	def factory():
+		preview = PreviewWidget()
 
-	ok = pane.window.activate_panel(pane, preview, _PANEL_ID)
-	if ok:
+		def on_cursor_changed(current, _previous):
+			try:
+				url = file_view.model().url(current)
+			except (ValueError, RuntimeError):
+				url = None
+			preview.show_preview(url)
+
+		# Connect signal on the main thread (inside factory)
 		file_view.selectionModel().currentRowChanged.connect(on_cursor_changed)
 		_cursor_connections[pane] = {
 			'callback': on_cursor_changed,
 			'file_view': file_view,
 		}
 		preview.show_preview(file_url)
+		return preview
+
+	pane.window.activate_panel(pane, factory, _PANEL_ID)
 
 
 def _close_preview(pane):

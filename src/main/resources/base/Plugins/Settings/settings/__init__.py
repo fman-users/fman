@@ -422,8 +422,8 @@ class OpenSettings(DirectoryPaneCommand):
 		if w.is_panel_active(self.pane, _PANEL_ID):
 			_close_settings(self.pane)
 		else:
-			panel = SettingsPanel(self.pane)
-			w.activate_panel(self.pane, panel, _PANEL_ID)
+			pane = self.pane
+			w.activate_panel(pane, lambda: SettingsPanel(pane), _PANEL_ID)
 
 	def is_visible(self):
 		return len(self.pane.window.get_panes()) >= 2

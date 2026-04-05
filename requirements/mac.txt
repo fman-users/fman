@@ -1,3 +1,4 @@
 -r base.txt
-osxtrash==1.6
+Send2Trash==1.8.3
 pyobjc-core==12.1
+pyobjc-framework-Cocoa==12.1
