@@ -41,29 +41,40 @@ def _set_checkbox_silent(cb, value):
 
 
 def _discover_themes():
-	try:
-		from alternative_colors import themes
-		return sorted(themes.keys())
-	except ImportError:
-		pass
-	return ['Default']
+	from theme_editor import _BUILTIN_THEMES
+	return ['Default'] + sorted(_BUILTIN_THEMES.keys())
 
 
 def _get_active_theme_name():
-	try:
-		from alternative_colors import current_theme
-		return current_theme or 'Default'
-	except ImportError:
-		pass
-	return 'Default'
+	from theme_editor import _load_custom_theme, _DEFAULTS
+	custom = _load_custom_theme()
+	if not custom:
+		return 'Default'
+	from theme_editor import _BUILTIN_THEMES
+	for name, colors in _BUILTIN_THEMES.items():
+		if all(custom.get(k) == v for k, v in colors.items()
+		       if v != _DEFAULTS.get(k)):
+			return name
+	return 'Custom'
 
 
 def _activate_theme_by_name(name):
-	try:
-		from alternative_colors import activate_theme
-		activate_theme(name)
-	except ImportError:
-		pass
+	from theme_editor import _BUILTIN_THEMES, _DEFAULTS, \
+		_apply_theme_to_app, _load_custom_theme, _save_custom_theme
+	if name == 'Default':
+		colors = dict(_DEFAULTS)
+		theme_data = _load_custom_theme()
+		theme_data.clear()
+		_save_custom_theme()
+	else:
+		theme_colors = _BUILTIN_THEMES.get(name, {})
+		colors = dict(_DEFAULTS)
+		colors.update(theme_colors)
+		theme_data = _load_custom_theme()
+		theme_data.clear()
+		theme_data.update(theme_colors)
+		_save_custom_theme()
+	_apply_theme_to_app(colors)
 
 
 class SettingsPanel(QWidget):
