@@ -70,6 +70,108 @@ for _group in _THEME_ELEMENTS:
 	for _key, _label, _default in _group['items']:
 		_DEFAULTS[_key] = _default
 
+_BUILTIN_THEMES = {
+	'Blue': {
+		'window_bg': '#000033', 'base_bg': '#000033', 'alternate_bg': '#000033',
+		'header_bg_top': '#0000e6', 'header_bg_bottom': '#000066',
+		'status_bar_bg_top': '#000066', 'status_bar_bg_bottom': '#0000e6',
+		'status_bar_border': '#8080e6', 'location_bar_border': '#000033',
+		'text_primary': '#ffff00', 'text_secondary': '#808080',
+		'text_dirs': '#ffffff', 'text_header': '#00ffff',
+		'text_status': '#ffffff', 'text_location': '#ffd000',
+		'selected_color': '#f92672', 'cursor_bg': '#00ffff',
+		'input_bg': '#000066', 'input_border': '#000066', 'input_text': '#ffffff',
+		'quicksearch_bg': '#000066', 'quicksearch_input_bg': '#006fff',
+		'quicksearch_input_text': '#000066', 'quicksearch_selected': '#0000e6',
+	},
+	'Default Alt': {
+		'window_bg': '#272822', 'base_bg': '#272822', 'alternate_bg': '#293024',
+		'header_bg_top': '#363731', 'header_bg_bottom': '#272822',
+		'status_bar_bg_top': '#5b5b5b', 'status_bar_bg_bottom': '#545454',
+		'status_bar_border': '#7d7d7d', 'location_bar_border': '#262626',
+		'text_primary': '#ffffff', 'text_secondary': '#75715e',
+		'text_dirs': '#ffffff', 'text_header': '#8f908a',
+		'text_status': '#ffffff', 'text_location': '#9a9a9a',
+		'selected_color': '#f92672', 'cursor_bg': '#49483e',
+		'input_bg': '#303030', 'input_border': '#363731', 'input_text': '#ffffff',
+		'quicksearch_bg': '#404040', 'quicksearch_input_bg': '#e6e6e6',
+		'quicksearch_input_text': '#1d1d1d', 'quicksearch_selected': '#575757',
+	},
+	'Dracula': {
+		'window_bg': '#282a36', 'base_bg': '#282a36', 'alternate_bg': '#282a36',
+		'header_bg_top': '#282a36', 'header_bg_bottom': '#282a36',
+		'status_bar_bg_top': '#44475a', 'status_bar_bg_bottom': '#44475a',
+		'status_bar_border': '#6272a4', 'location_bar_border': '#282a36',
+		'text_primary': '#f8f8f2', 'text_secondary': '#50fa7b',
+		'text_dirs': '#f8f8f2', 'text_header': '#bd93f9',
+		'text_status': '#8be9fd', 'text_location': '#8be9fd',
+		'selected_color': '#bd93f9', 'cursor_bg': '#44475a',
+		'input_bg': '#44475a', 'input_border': '#44475a', 'input_text': '#f8f8f2',
+		'quicksearch_bg': '#282a36', 'quicksearch_input_bg': '#44475a',
+		'quicksearch_input_text': '#f8f8f2', 'quicksearch_selected': '#44475a',
+	},
+	'Dracula Alt': {
+		'window_bg': '#282a36', 'base_bg': '#282a36', 'alternate_bg': '#302c40',
+		'header_bg_top': '#282a36', 'header_bg_bottom': '#282a36',
+		'status_bar_bg_top': '#44475a', 'status_bar_bg_bottom': '#44475a',
+		'status_bar_border': '#6272a4', 'location_bar_border': '#282a36',
+		'text_primary': '#f8f8f2', 'text_secondary': '#50fa7b',
+		'text_dirs': '#f8f8f2', 'text_header': '#bd93f9',
+		'text_status': '#8be9fd', 'text_location': '#8be9fd',
+		'selected_color': '#bd93f9', 'cursor_bg': '#44475a',
+		'input_bg': '#44475a', 'input_border': '#44475a', 'input_text': '#f8f8f2',
+		'quicksearch_bg': '#282a36', 'quicksearch_input_bg': '#44475a',
+		'quicksearch_input_text': '#f8f8f2', 'quicksearch_selected': '#44475a',
+	},
+	'Forest': {
+		'window_bg': '#1f1f1f', 'base_bg': '#1f1f1f', 'alternate_bg': '#1f1f1f',
+		'status_bar_bg_top': '#2f4f32', 'status_bar_bg_bottom': '#2f4f32',
+		'status_bar_border': '#4e684e',
+		'text_dirs': '#d4d7d6', 'text_secondary': '#395f3c',
+		'selected_color': '#bde091', 'cursor_bg': '#363636',
+		'quicksearch_bg': '#2f4f32',
+	},
+	'High Contrast Light': {
+		'window_bg': '#cccccc', 'base_bg': '#ffffff', 'alternate_bg': '#efefef',
+		'header_bg_top': '#eeeeee', 'header_bg_bottom': '#eeeeee',
+		'status_bar_bg_top': '#ffffff', 'status_bar_bg_bottom': '#ffffff',
+		'status_bar_border': '#000000', 'location_bar_border': '#000000',
+		'text_primary': '#000000', 'text_secondary': '#000000',
+		'text_dirs': '#000000', 'text_header': '#000000',
+		'text_status': '#000000', 'text_location': '#000000',
+		'selected_color': '#000000', 'cursor_bg': '#000000',
+		'input_bg': '#bbbbbb', 'input_border': '#bbbbbb', 'input_text': '#000000',
+		'quicksearch_bg': '#888888', 'quicksearch_input_bg': '#ffffff',
+		'quicksearch_input_text': '#000000', 'quicksearch_selected': '#dddddd',
+	},
+	'Nord': {
+		'window_bg': '#434C5E', 'base_bg': '#2E3440', 'alternate_bg': '#2E3440',
+		'header_bg_top': '#2E3440', 'header_bg_bottom': '#2E3440',
+		'status_bar_bg_top': '#434C5E', 'status_bar_bg_bottom': '#434C5E',
+		'status_bar_border': '#434C5E', 'location_bar_border': '#2E3440',
+		'text_primary': '#D8DEE9', 'text_secondary': '#8FBCBB',
+		'text_dirs': '#D8DEE9', 'text_header': '#EBCB8B',
+		'text_status': '#88C0D0', 'text_location': '#88C0D0',
+		'selected_color': '#BF616A', 'cursor_bg': '#4C566A',
+		'input_bg': '#434C5E', 'input_border': '#434C5E', 'input_text': '#D8DEE9',
+		'quicksearch_bg': '#2E3440', 'quicksearch_input_bg': '#434C5E',
+		'quicksearch_input_text': '#D8DEE9', 'quicksearch_selected': '#434C5E',
+	},
+	'White': {
+		'window_bg': '#f6f8fa', 'base_bg': '#ffffff', 'alternate_bg': '#ffffff',
+		'header_bg_top': '#f6f8fa', 'header_bg_bottom': '#f6f8fa',
+		'status_bar_bg_top': '#ffffff', 'status_bar_bg_bottom': '#ffffff',
+		'status_bar_border': '#f6f8fa', 'location_bar_border': '#f6f8fa',
+		'text_primary': '#000000', 'text_secondary': '#000000',
+		'text_dirs': '#000000', 'text_header': '#000000',
+		'text_status': '#000000', 'text_location': '#000000',
+		'selected_color': '#000000', 'cursor_bg': '#f6f8fa',
+		'input_bg': '#ffffff', 'input_border': '#f6f8fa', 'input_text': '#000000',
+		'quicksearch_bg': '#ffffff', 'quicksearch_input_bg': '#ffffff',
+		'quicksearch_input_text': '#000000', 'quicksearch_selected': '#f6f8fa',
+	},
+}
+
 _THEME_FILE_FILTER = 'fman Theme (*.fman-theme);;JSON (*.json);;All Files (*)'
 
 _CUSTOM_THEME_JSON = 'Custom Theme.json'
@@ -265,6 +367,9 @@ class ThemeEditorPanel(QWidget):
 		self._colors = dict(_DEFAULTS)
 		custom = _load_custom_theme()
 		self._colors.update(custom)
+		self._section_headers = []
+		self._back_btn = None
+		self._apply_btn = None
 		self._init_ui()
 
 	def _init_ui(self):
@@ -278,15 +383,16 @@ class ThemeEditorPanel(QWidget):
 
 		header_row = QHBoxLayout()
 		header_row.setContentsMargins(8, 6, 8, 6)
-		back_btn = QPushButton('\u2190 Back')
-		back_btn.setFixedWidth(60)
-		back_btn.setStyleSheet(
-			'QPushButton { color: #a6e22e; background: transparent; '
+		self._back_btn = QPushButton('\u2190 Back')
+		self._back_btn.setFixedWidth(60)
+		accent = self._colors.get('selected_color', _DEFAULTS['selected_color'])
+		self._back_btn.setStyleSheet(
+			'QPushButton { color: %s; background: transparent; '
 			'border: none; font-size: 11px; text-align: left; }'
-			'QPushButton:hover { color: white; }'
+			'QPushButton:hover { color: white; }' % accent
 		)
-		back_btn.clicked.connect(self._go_back)
-		header_row.addWidget(back_btn)
+		self._back_btn.clicked.connect(self._go_back)
+		header_row.addWidget(self._back_btn)
 		title = QLabel('Theme Editor')
 		title.setStyleSheet(
 			'QLabel { font-weight: bold; font-size: 14px; color: white; }'
@@ -369,15 +475,16 @@ class ThemeEditorPanel(QWidget):
 		self._grid_layout.addSpacing(12)
 		btn_row = QHBoxLayout()
 
-		apply_btn = QPushButton('Apply to App')
-		apply_btn.setStyleSheet(
-			'QPushButton { background-color: #a6e22e; color: #272822; '
+		self._apply_btn = QPushButton('Apply to App')
+		self._apply_btn.setStyleSheet(
+			'QPushButton { background-color: %s; color: %s; '
 			'font-weight: bold; padding: 6px 12px; border: none; '
 			'border-radius: 3px; }'
-			'QPushButton:hover { background-color: #b8f330; }'
+			'QPushButton:hover { opacity: 0.8; }'
+			% (accent, self._colors.get('base_bg', _DEFAULTS['base_bg']))
 		)
-		apply_btn.clicked.connect(self._apply_theme)
-		btn_row.addWidget(apply_btn)
+		self._apply_btn.clicked.connect(self._apply_theme)
+		btn_row.addWidget(self._apply_btn)
 
 		reset_btn = QPushButton('Reset to Default')
 		reset_btn.setStyleSheet(
@@ -398,10 +505,12 @@ class ThemeEditorPanel(QWidget):
 
 	def _add_section_header(self, title):
 		label = QLabel(title)
+		accent = self._colors.get('selected_color', _DEFAULTS['selected_color'])
 		label.setStyleSheet(
-			'QLabel { color: #a6e22e; font-weight: bold; font-size: 11px; '
-			'padding-top: 8px; padding-bottom: 2px; }'
+			'QLabel { color: %s; font-weight: bold; font-size: 11px; '
+			'padding-top: 8px; padding-bottom: 2px; }' % accent
 		)
+		self._section_headers.append(label)
 		self._grid_layout.addWidget(label)
 
 	# --- Color picker handlers ---
@@ -416,6 +525,27 @@ class ThemeEditorPanel(QWidget):
 		for key, btn in self._color_buttons.items():
 			btn.set_color(self._colors.get(key, _DEFAULTS.get(key, '#000')))
 		self._preview.update_colors(self._colors)
+		self._update_accent_colors()
+
+	def _update_accent_colors(self):
+		accent = self._colors.get('selected_color', _DEFAULTS['selected_color'])
+		base = self._colors.get('base_bg', _DEFAULTS['base_bg'])
+		self._back_btn.setStyleSheet(
+			'QPushButton { color: %s; background: transparent; '
+			'border: none; font-size: 11px; text-align: left; }'
+			'QPushButton:hover { color: white; }' % accent
+		)
+		self._apply_btn.setStyleSheet(
+			'QPushButton { background-color: %s; color: %s; '
+			'font-weight: bold; padding: 6px 12px; border: none; '
+			'border-radius: 3px; }'
+			'QPushButton:hover { opacity: 0.8; }' % (accent, base)
+		)
+		for lbl in self._section_headers:
+			lbl.setStyleSheet(
+				'QLabel { color: %s; font-weight: bold; font-size: 11px; '
+				'padding-top: 8px; padding-bottom: 2px; }' % accent
+			)
 
 	# --- Apply / Reset ---
 
@@ -448,6 +578,10 @@ class ThemeEditorPanel(QWidget):
 		saved = _load_saved_themes()
 		for name in sorted(saved.keys()):
 			self._theme_combo.addItem(name)
+		if _BUILTIN_THEMES:
+			self._theme_combo.insertSeparator(self._theme_combo.count())
+			for name in sorted(_BUILTIN_THEMES.keys()):
+				self._theme_combo.addItem(name)
 		self._theme_combo.setCurrentIndex(0)
 		self._theme_combo.blockSignals(False)
 
@@ -456,7 +590,7 @@ class ThemeEditorPanel(QWidget):
 			return
 		name = self._theme_combo.currentText()
 		saved = _load_saved_themes()
-		theme_colors = saved.get(name, {})
+		theme_colors = saved.get(name) or _BUILTIN_THEMES.get(name, {})
 		self._load_colors_into_ui(theme_colors)
 
 	def _on_save_theme(self):
@@ -617,7 +751,26 @@ def _apply_theme_to_app(colors):
 		QPalette.Text,
 		QColor(c.get('text_primary', _DEFAULTS['text_primary']))
 	)
-	palette.setColor(QPalette.ButtonText, QColor('#b6b3ab'))
+	palette.setColor(
+		QPalette.ButtonText,
+		QColor(c.get('text_primary', _DEFAULTS['text_primary']))
+	)
+	palette.setColor(
+		QPalette.BrightText,
+		QColor(c.get('selected_color', _DEFAULTS['selected_color']))
+	)
+	palette.setColor(
+		QPalette.Button,
+		QColor(c.get('window_bg', _DEFAULTS['window_bg']))
+	)
+	palette.setColor(
+		QPalette.Highlight,
+		QColor(c.get('cursor_bg', _DEFAULTS['cursor_bg']))
+	)
+	palette.setColor(
+		QPalette.HighlightedText,
+		QColor(c.get('text_primary', _DEFAULTS['text_primary']))
+	)
 	app.setPalette(palette)
 
 	# Build and apply QSS overrides
@@ -636,6 +789,27 @@ def _apply_theme_to_app(colors):
 
 	new_sheet = current + '\n' + marker + '\n' + qss + '\n' + end_marker
 	app.setStyleSheet(new_sheet)
+
+	# Update quicksearch item CSS in the theme engine
+	try:
+		from vitraj import _get_app_ctxt
+		theme = _get_app_ctxt().theme
+		text_primary = c.get('text_primary', _DEFAULTS['text_primary'])
+		text_secondary = c.get('text_secondary', _DEFAULTS['text_secondary'])
+		selected = c.get('selected_color', _DEFAULTS['selected_color'])
+		qs_css = (
+			'.quicksearch-item-title { color: %s; }\n'
+			'.quicksearch-item-title-highlight { color: %s; }\n'
+			'.quicksearch-item-hint { color: %s; }\n'
+			'.quicksearch-item-description { color: %s; }\n'
+			% (text_secondary, selected, text_primary, text_secondary)
+		)
+		from vitraj.impl.util.css import parse_css
+		rules = parse_css(qs_css.encode())
+		theme._css_rules['__custom_theme__'] = rules
+		theme._quicksearch_item_css = theme._get_quicksearch_item_css()
+	except Exception:
+		pass
 
 
 def _build_override_qss(c):
@@ -733,10 +907,25 @@ def _build_override_qss(c):
 		% c.get('quicksearch_selected', _DEFAULTS['quicksearch_selected'])
 	)
 
+	text_primary = c.get('text_primary', _DEFAULTS['text_primary'])
 	rules.append(
-		'Overlay { background-color: %s; border: 1px solid %s; }'
+		'QPushButton { color: %s; }' % text_primary
+	)
+	rules.append(
+		'QMessageBox { color: %s; }' % text_primary
+	)
+	rules.append(
+		'QMessageBox QLabel { color: %s; }' % text_primary
+	)
+	rules.append(
+		'QDialog { color: %s; }' % text_primary
+	)
+
+	rules.append(
+		'Overlay { background-color: %s; border: 1px solid %s; color: %s; }'
 		% (c.get('base_bg', _DEFAULTS['base_bg']),
-		   c.get('input_border', _DEFAULTS['input_border']))
+		   c.get('input_border', _DEFAULTS['input_border']),
+		   text_primary)
 	)
 	rules.append(
 		'FilterBar { background-color: %s; border: 1px solid %s; }'
