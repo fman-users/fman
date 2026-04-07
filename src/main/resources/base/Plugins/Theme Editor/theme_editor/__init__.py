@@ -796,12 +796,13 @@ def _apply_theme_to_app(colors):
 		theme = _get_app_ctxt().theme
 		text_primary = c.get('text_primary', _DEFAULTS['text_primary'])
 		text_secondary = c.get('text_secondary', _DEFAULTS['text_secondary'])
+		selected = c.get('selected_color', _DEFAULTS['selected_color'])
 		qs_css = (
 			'.quicksearch-item-title { color: %s; }\n'
 			'.quicksearch-item-title-highlight { color: %s; }\n'
 			'.quicksearch-item-hint { color: %s; }\n'
 			'.quicksearch-item-description { color: %s; }\n'
-			% (text_secondary, text_primary, text_primary, text_secondary)
+			% (text_secondary, selected, text_primary, text_secondary)
 		)
 		from vitraj.impl.util.css import parse_css
 		rules = parse_css(qs_css.encode())
