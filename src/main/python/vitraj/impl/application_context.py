@@ -42,10 +42,20 @@ from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import QStyleFactory, QFileIconProvider
 
 import vitraj
+import vitraj.fs
+import vitraj.url
+import vitraj.clipboard
 import json
 import logging
 import os
 import sys
+
+# Legacy fman plugin compatibility: alias fman -> vitraj in sys.modules
+# so that `import fman` / `from fman import ...` / `from fman.fs import ...` work.
+sys.modules.setdefault('fman', vitraj)
+sys.modules.setdefault('fman.fs', vitraj.fs)
+sys.modules.setdefault('fman.url', vitraj.url)
+sys.modules.setdefault('fman.clipboard', vitraj.clipboard)
 
 def get_application_context():
 	return fbs_appctxt.get_application_context(
