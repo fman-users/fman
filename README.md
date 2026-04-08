@@ -1,5 +1,7 @@
 # vitraj
 
+![image](src/main/icons/src/logo.svg)
+
 An opinionated dual-pane file manager for macOS, forked from [fman](https://github.com/fman-users/fman).
 
 This is a personal rework targeting macOS as the primary platform. While the cross-platform codebase (Windows, Linux) is preserved, development and testing focus on macOS with Python 3.14.
