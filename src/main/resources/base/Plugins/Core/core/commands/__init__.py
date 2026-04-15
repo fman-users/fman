@@ -1034,29 +1034,29 @@ class InitHiddenFilesFilter(DirectoryPaneListener):
 		# We need to do this somewhere when fman starts. We can't do it in the
 		# __init__ of ToggleHiddenFiles, because fman instantiates commands
 		# lazily.
-		if not _is_showing_hidden_files(self.pane):
+		self._was_showing = _is_showing_hidden_files(self.pane)
+		if not self._was_showing:
 			_toggle_hidden_files(self.pane, False)
+	def before_location_change(self, url, sort_column='', ascending=True):
+		_sync_hidden_filter(self.pane)
+	def on_command(self, command_name, args):
+		# Detect when show_hidden_files changed (e.g. by a third-party plugin
+		# that intercepted toggle_hidden_files with its own filter function).
+		showing = _is_showing_hidden_files(self.pane)
+		if showing != self._was_showing:
+			self._was_showing = showing
+			_sync_hidden_filter(self.pane)
 
 def _is_showing_hidden_files(pane):
 	return _get_pane_info(pane)['show_hidden_files']
 
 def _toggle_hidden_files(pane, value):
-	if value:
-		pane._remove_filter(_hidden_file_filter)
-	else:
-		pane._add_filter(_hidden_file_filter)
 	_get_pane_info(pane)['show_hidden_files'] = value
-	# Consider a scenario where the user:
-	#  1. shows hidden files, then
-	#  2. reloads plugins.
-	# The second step reloads the settings. This reverts 'Panes.json' to the
-	# version that was last saved. If we only relied on the save_on_quit
-	# functionality of load_json(...), then the last saved version would be the
-	# one when fman was last closed. But this does not reflect the fact that we
-	# are now showing hidden files. So we flush Panes.json immediately to disk:
+	_sync_hidden_filter(pane)
+	# Flush Panes.json immediately so a plugin reload doesn't revert the toggle:
 	save_json('Panes.json')
-	# When we toggle hidden files again, this avoids an error caused by
-	# `_remove_filter` being called for a non-active filter.
+	# Reload to apply the filter change to the current directory:
+	pane.reload()
 
 def _get_pane_info(pane):
 	settings = load_json('Panes.json', default=[])
@@ -1065,6 +1065,11 @@ def _get_pane_info(pane):
 	for _ in range(pane_index - len(settings) + 1):
 		settings.append(default.copy())
 	return settings[pane_index]
+
+def _sync_hidden_filter(pane):
+	pane._remove_filter(_hidden_file_filter)
+	if not _is_showing_hidden_files(pane):
+		pane._add_filter(_hidden_file_filter)
 
 def _hidden_file_filter(url):
 	if PLATFORM == 'Mac' and url == 'file:///Volumes':
