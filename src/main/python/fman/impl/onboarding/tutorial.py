@@ -537,7 +537,7 @@ def _get_navigation_steps(
 	return []
 
 def _upper_server(unc_path):
-	"""
+	r"""
 	\\server\Folder -> \\SERVER\Folder
 	"""
 	assert unc_path.startswith(r'\\'), unc_path

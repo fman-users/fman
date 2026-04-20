@@ -216,7 +216,7 @@ class QuicksearchItemRenderer:
 			width = max(width, w)
 			height += h
 		width += self._padding_left + self._padding_right
-		return QSize(width, height)
+		return QSize(int(width), int(height))
 	def _draw_background(self, painter):
 		self._proxy.drawPrimitive(
 			QStyle.PE_PanelItemViewItem, self._option, painter, self._widget
@@ -226,13 +226,13 @@ class QuicksearchItemRenderer:
 		highlight_formats = self._get_highlight_formats()
 		painter.setPen(self._css['title']['color'])
 		pos = self._option.rect.topLeft() \
-			  + QPoint(self._padding_left, self._padding_top)
+			  + QPoint(int(self._padding_left), int(self._padding_top))
 		layout.draw(painter, pos, highlight_formats)
 	def _draw_hint(self, painter):
 		if not self._hint:
 			return
 		font = QFont(self._option.font)
-		font.setPointSize(self._css['hint']['font-size_pts'])
+		font.setPointSize(int(self._css['hint']['font-size_pts']))
 		painter.setFont(font)
 		painter.setPen(self._css['hint']['color'])
 		rect = self._get_title_rect()
@@ -246,11 +246,11 @@ class QuicksearchItemRenderer:
 		layout.draw(painter, QPointF(title_rect.left(), title_rect.bottom()))
 	def _layout_title(self):
 		font = QFont(self._option.font)
-		font.setPointSize(self._css['title']['font-size_pts'])
+		font.setPointSize(int(self._css['title']['font-size_pts']))
 		return self._layout_text(self._title, font)
 	def _layout_description(self):
 		font = QFont(self._option.font)
-		font.setPointSize(self._css['description']['font-size_pts'])
+		font.setPointSize(int(self._css['description']['font-size_pts']))
 		return self._layout_text(self._description, font)
 	def _get_title_rect(self):
 		x = self._option.rect.x() + self._padding_left
