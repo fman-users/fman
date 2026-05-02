@@ -17,7 +17,7 @@ from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
 from io import UnsupportedOperation
 from itertools import chain
 from os import strerror
-from os.path import basename, pardir
+from os.path import pardir
 from pathlib import PurePath
 from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QDesktopServices

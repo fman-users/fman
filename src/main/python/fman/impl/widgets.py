@@ -155,7 +155,7 @@ class DirectoryPaneWidget(QWidget):
 		return column, ascending
 	@run_in_main_thread
 	def get_column_widths(self):
-		return [self._file_view.columnWidth(i) for i in (0, 1)]
+		return [self._file_view.columnWidth(i) for i in range(self._model.columnCount())]
 	@run_in_main_thread
 	def set_column_widths(self, column_widths):
 		num_columns = self._model.columnCount()
