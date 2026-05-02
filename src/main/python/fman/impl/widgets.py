@@ -37,7 +37,7 @@ class Application(QApplication):
 	def set_style_sheet(self, stylesheet):
 		self.setStyleSheet(stylesheet)
 	def _on_state_changed(self, new_state):
-		if new_state == Qt.ApplicationActive:
+		if new_state == Qt.ApplicationActive and self._main_window is not None:
 			for pane in self._main_window.get_panes():
 				pane.reload()
 
