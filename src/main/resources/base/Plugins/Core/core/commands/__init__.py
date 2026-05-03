@@ -1730,7 +1730,7 @@ class ArchiveOpenListener(DirectoryPaneListener):
 			except (KeyError, ValueError):
 				return None
 			if scheme == 'file://':
-				new_scheme = _get_handler_for_archive(basename(path))
+				new_scheme = _get_handler_for_archive(basename(url))
 				if new_scheme:
 					try:
 						if is_dir(url):
