@@ -43,6 +43,12 @@ class ResizeColumnTest(TestCase):
 		self._expect([2, 1], 0, 2, [1, 2], [1, 1], 3)
 	def test_rightalign_last_col(self):
 		self._expect([1, 2, 1], 0, 1, [2, 1, 1], [1, 1, 1])
+	def test_shrink_respects_available_width_cap(self):
+		result = _resize_column(0, 3, [3, 1, 1], [1, 1, 1], 6)
+		self.assertLessEqual(sum(result), 6)
+	def test_shrink_expansion_does_not_exceed_available(self):
+		result = _resize_column(0, 4, [4, 1], [1, 1], 5)
+		self.assertLessEqual(sum(result), 5)
 	def _expect(
 		self, result, col, old_size, widths, min_widths, available_width=None
 	):

@@ -264,6 +264,42 @@ class CachedIteratorTest(TestCase):
 		iterable.remove(1)
 		with self.assertRaises(StopIteration):
 			next(iterator)
+	def test_remove_then_append_same_item(self):
+		iterable = CachedIterator(self._generate(1, 2))
+		iterator = iter(iterable)
+		self.assertEqual(1, next(iterator))
+		iterable.remove(2)
+		iterable.append(2)
+		self.assertEqual(2, next(iterator))
+		with self.assertRaises(StopIteration):
+			next(iterator)
+		self.assertEqual([1, 2], list(iterable))
+	def test_remove_before_yield_then_append(self):
+		iterable = CachedIterator(self._generate(1, 2, 3))
+		iterable.remove(3)
+		iterable.append(3)
+		result = list(iterable)
+		self.assertIn(3, result)
+		self.assertEqual(Counter([1, 2, 3]), Counter(result))
+	def test_pre_remove_unknown_item_then_source_yields_it(self):
+		iterable = CachedIterator(self._generate(1, 2))
+		iterable.remove(2)
+		result = list(iterable)
+		self.assertEqual([1], result)
+	def test_concurrent_remove_append(self):
+		iterable = CachedIterator(self._generate(*range(100)))
+		results_before = []
+		results_after = []
+		barrier = Event()
+		def reader():
+			barrier.wait()
+			results_after.extend(list(iterable))
+		for i in range(50, 100):
+			iterable.remove(i)
+		for i in range(50, 100):
+			iterable.append(i)
+		results_before = list(iterable)
+		self.assertEqual(Counter(range(100)), Counter(results_before))
 	def _generate(self, *args):
 		yield from args
 	def _generate_slowly(self, *args):
