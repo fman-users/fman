@@ -20,6 +20,8 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 	sort_order_changed = pyqtSignal(int, int)
 	transaction_ended = pyqtSignal()
 
+	_MAX_VISITED = 512
+
 	def __init__(self, parent, fs, null_location):
 		super().__init__(parent)
 		self._fs = fs
@@ -106,6 +108,9 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 		self.setSourceModel(new_model)
 		self._connect_signals(new_model)
 		self._already_visited.add(url)
+		if len(self._already_visited) > self._MAX_VISITED:
+			self._already_visited.clear()
+			self._already_visited.add(url)
 		self.location_changed.emit(url)
 		order = Qt.AscendingOrder if ascending else Qt.DescendingOrder
 		self.sort_order_changed.emit(sort_col_index, order)
@@ -189,5 +194,11 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 		self.sort_order_changed.emit(column, order)
 	def _emit_transaction_ended(self):
 		self.transaction_ended.emit()
+	def shutdown(self):
+		self._fs.file_removed.remove_callback(self._on_file_removed)
+		model = self.sourceModel()
+		if model:
+			self._disconnect_signals(model)
+			model.shutdown()
 	def __str__(self):
 		return '<%s: %s>' % (self.__class__.__name__, self.get_location())

@@ -68,7 +68,7 @@ class Event:
 	def remove_callback(self, callback):
 		self._callbacks.remove(callback)
 	def trigger(self, *args):
-		for callback in self._callbacks:
+		for callback in list(self._callbacks):
 			callback(*args)
 
 # Copied from core.util:

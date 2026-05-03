@@ -9,7 +9,7 @@ message_tmp_file=`mktemp`
 git log --pretty=format:%B -n1 > ${message_tmp_file}
 sha=`git log --pretty=format:%H -n1`
 date=`git log --pretty=format:%cd --date=iso-strict -n1`
-curl --data-urlencode secret=k92XhhhmOf8rD7QJ --data-urlencode sha=${sha} \
+curl --data-urlencode secret=${FMAN_API_SECRET} --data-urlencode sha=${sha} \
 	--data-urlencode date=${date} --data-urlencode message@${message_tmp_file} \
 	${URL}
 rm ${message_tmp_file}

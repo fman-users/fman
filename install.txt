@@ -30,10 +30,10 @@ fmanSetup.exe (Google Omaha installer)
 ======================================
 1)
 hammer -c
-set TIMESTAMP_SERVER=http://sha256timestamp.ws.symantec.com/sha256/timestamp
+set TIMESTAMP_SERVER=http://timestamp.digicert.com
 set SHA1_TIMESTAMP_SERVER=%TIMESTAMP_SERVER%
 set SHA2_TIMESTAMP_SERVER=%TIMESTAMP_SERVER%
-set AUTHENTICODE_FILE="c:\Users\Michael\dev\fman\conf\windows\michaelherrmann.pfx"
+set AUTHENTICODE_FILE="<path-to-your-pfx-certificate>"
 set AUTHENTICODE_PASSWORD="..."
 hammer MODE=opt-win --authenticode_file=%AUTHENTICODE_FILE% --authenticode_password=%AUTHENTICODE_PASSWORD% --sha1_authenticode_file=%AUTHENTICODE_FILE% --sha2_authenticode_file=%AUTHENTICODE_FILE% --sha1_authenticode_password=%AUTHENTICODE_PASSWORD% --sha2_authenticode_password=%AUTHENTICODE_PASSWORD%
 

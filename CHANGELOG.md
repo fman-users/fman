@@ -36,5 +36,5 @@
   `try/except TypeError` around `Path.resolve(strict=True)` and updated
   version-specific comments.
 - **Reduced macOS app bundle size** from ~110MB to ~77MB by stripping unused
-  Qt frameworks (QtQml, QtQuick, QtWebSockets), unused Qt plugins, and
+  Qt frameworks (QtQml, QtQmlModels, QtQuick, QtWebSockets), unused Qt plugins, and
   build-only dependencies (boto3/botocore) from the frozen bundle.

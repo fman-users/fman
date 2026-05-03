@@ -55,7 +55,14 @@ class DragAndDrop(QAbstractTableModel):
 			return True
 		if not data.hasUrls():
 			return False
-		urls = [from_qurl(qurl) for qurl in data.urls()]
+		urls = []
+		for qurl in data.urls():
+			try:
+				urls.append(from_qurl(qurl))
+			except ValueError:
+				continue
+		if not urls:
+			return False
 		dest = self._get_drop_dest(parent)
 		if action in (MoveAction, CopyAction):
 			self.files_dropped.emit(urls, dest, action == CopyAction)

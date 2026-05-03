@@ -176,7 +176,8 @@ def _resize_column(col, new_size, widths, min_widths, available_width):
 	else:
 		next_col = col + 1
 		if sum(result) < available_width:
-			result[next_col] -= delta
+			gain = min(-delta, available_width - sum(result))
+			result[next_col] += gain
 	to_distribute = available_width - sum(result)
 	if to_distribute > 0:
 		for c, (w, m_w) in enumerate(zip(widths, min_widths)):

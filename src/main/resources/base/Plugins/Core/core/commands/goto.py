@@ -126,8 +126,9 @@ class GoTo(DirectoryPaneCommand):
 				except OSError:
 					pass
 				else:
-					already_yielded.add(stat.st_ino)
-					to_visit.append((stat, file_path))
+					if stat.st_ino not in already_yielded:
+						already_yielded.add(stat.st_ino)
+						to_visit.append((stat, file_path))
 			to_visit.sort(key=lambda tpl: tpl[0].st_mtime)
 
 class GoToListener(DirectoryPaneListener):

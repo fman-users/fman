@@ -213,7 +213,6 @@ class ExternalPlugin(Plugin):
 				self._add_unload_action(component.unload, config, *args)
 				for error in errors:
 					self._error_handler.report(error)
-					break
 	def _add_unload_action(self, f, *args, **kwargs):
 		self._unload_actions.append((f, args, kwargs))
 	def unload(self):

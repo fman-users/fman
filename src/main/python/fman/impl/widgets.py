@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import QWidget, QMainWindow, QSplitter, QStatusBar, \
 from random import randint, randrange
 
 import re
+import struct
 
 class Application(QApplication):
 	def __init__(self, *args, **kwargs):
@@ -434,12 +435,12 @@ class MainWindow(QMainWindow):
 	def saveState(self, version=0):
 		self_state = super().saveState(version)
 		splitter_state = self._splitter.saveState()
-		return self_state + splitter_state + bytes([len(self_state)])
+		return self_state + splitter_state + struct.pack('<I', len(self_state))
 	def restoreState(self, state, version=0):
-		self_state_len = state[-1]
+		self_state_len = struct.unpack('<I', state[-4:])[0]
 		if not super().restoreState(state[0:self_state_len], version):
 			return False
-		self._splitter.restoreState(state[self_state_len:-1])
+		self._splitter.restoreState(state[self_state_len:-4])
 		return True
 	def focusNextPrevChild(self, next):
 		# Returning False here lets us receive Tab in keyPressEvent(...).

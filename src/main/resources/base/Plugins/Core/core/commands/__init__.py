@@ -160,7 +160,7 @@ class _Delete(Task):
 					self.show_alert(message)
 				else:
 					message += ' Do you want to continue?'
-					choice = show_alert(message, YES | NO | YES_TO_ALL)
+					choice = self.show_alert(message, YES | NO | YES_TO_ALL)
 					if choice & NO:
 						break
 					if choice & YES_TO_ALL:
@@ -935,7 +935,6 @@ class OpenNativeFileManager(DirectoryPaneCommand):
 class CopyPathsToClipboard(DirectoryPaneCommand):
 	def __call__(self):
 		to_copy = self.get_chosen_files() or [self.pane.get_path()]
-		files = '\n'.join(to_copy)
 		clipboard.clear()
 		clipboard.set_text('\n'.join(map(as_human_readable, to_copy)))
 		_report_clipboard_action('Copied', to_copy, ' to the clipboard', 'path')
@@ -1315,11 +1314,15 @@ class OpenDataDirectory(DirectoryPaneCommand):
 
 class GoBack(DirectoryPaneCommand):
 	def __call__(self):
-		HistoryListener.INSTANCES[self.pane].go_back()
+		history = HistoryListener.INSTANCES.get(self.pane)
+		if history:
+			history.go_back()
 
 class GoForward(DirectoryPaneCommand):
 	def __call__(self):
-		HistoryListener.INSTANCES[self.pane].go_forward()
+		history = HistoryListener.INSTANCES.get(self.pane)
+		if history:
+			history.go_forward()
 
 class HistoryListener(DirectoryPaneListener):
 
@@ -1440,7 +1443,13 @@ class InstallPlugin(ApplicationCommand):
 			with open(zip_path, 'wb') as f:
 				f.write(zipball_contents)
 			zip_url = as_url(zip_path, 'zip://')
-			dir_in_zip, = iterdir(zip_url)
+			dirs_in_zip = list(iterdir(zip_url))
+			if len(dirs_in_zip) != 1:
+				raise ValueError(
+					'Expected one top-level directory in zip, got %d'
+					% len(dirs_in_zip)
+				)
+			dir_in_zip = dirs_in_zip[0]
 			copy(join(zip_url, dir_in_zip), dest_dir_url)
 		return dest_dir
 	def _load_installed_plugin(self, plugin_dir):

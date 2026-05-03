@@ -61,12 +61,9 @@ class ApplicationCommandRegistry(CommandRegistry):
 		class_name = command.__class__.__name__
 		self._callback.before_command(class_name)
 		msg_on_err = 'Command %r raised error.' % class_name
-		try:
-			with ReportExceptions(self._error_handler, msg_on_err):
-				command(**args)
-		except Exception:
-			pass
-		else:
+		with ReportExceptions(self._error_handler, msg_on_err) as cm:
+			command(**args)
+		if not cm.exception:
 			self._callback.after_command(class_name)
 
 class PaneCommandRegistry(CommandRegistry):
@@ -123,12 +120,9 @@ class PaneCommandRegistry(CommandRegistry):
 		self._callback.before_command(class_name)
 		with self._set_context(pane, file_under_cursor):
 			msg_on_err = 'Command %r raised error.' % class_name
-			try:
-				with ReportExceptions(self._error_handler, msg_on_err):
-					command(**args)
-			except Exception:
-				pass
-			else:
+			with ReportExceptions(self._error_handler, msg_on_err) as cm:
+				command(**args)
+			if not cm.exception:
 				self._callback.after_command(class_name)
 	def _get_command(self, pane, name):
 		try:

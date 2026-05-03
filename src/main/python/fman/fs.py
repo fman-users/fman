@@ -108,7 +108,9 @@ class FileSystem:
 	def notify_file_removed(self, path):
 		self._file_removed.trigger(self.scheme + path)
 	def notify_file_changed(self, path):
-		for callback in self._file_changed_callbacks.get(path, []):
+		with self._file_changed_callbacks_lock:
+			callbacks = list(self._file_changed_callbacks.get(path, []))
+		for callback in callbacks:
 			callback(self.scheme + path)
 	def samefile(self, path1, path2):
 		return self.resolve(path1) == self.resolve(path2)

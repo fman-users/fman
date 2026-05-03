@@ -115,10 +115,8 @@ class DirectoryPane:
 		self._widget.move_cursor_page_up(toggle_selection)
 	def place_cursor_at(self, file_url):
 		self._widget.place_cursor_at(file_url)
-	# TODO: Rename to get_location()
 	def get_path(self):
 		return self._widget.get_location()
-	# TODO: Rename to set_location(...)
 	def set_path(self, dir_url, callback=None, onerror=_set_path_onerror):
 		args = dir_url, '', True
 		while True:
@@ -199,7 +197,6 @@ class DirectoryPaneListener:
 		pass
 	def on_name_edited(self, file_url, new_name):
 		pass
-	# TODO: Rename to after_location_change()
 	def on_path_changed(self):
 		pass
 	def before_location_change(self, url, sort_column='', ascending=True):

@@ -226,15 +226,18 @@ class Model(SortFilterTableModel, DragAndDrop):
 	@transaction(priority=3)
 	def sort(self, column, order=Qt.AscendingOrder):
 		ascending = order == Qt.AscendingOrder
-		for i, row in enumerate(self._rows):
+		updated = {}
+		for i, row in enumerate(list(self._rows)):
 			if not self._sort_value_is_loaded(row, column, ascending):
 				new_row = self._load_sort_value(row, column, ascending)
-				# Here, we violate the constraint that data only be changed in
-				# the main thread. But! The data we are changing here is not
-				# "visible" outside this class. So it's OK.
-				self._rows[i] = new_row
-				self._files[row.url] = new_row
-		run_in_main_thread(super().sort)(column, order)
+				updated[i] = new_row
+		self._commit_sort_updates_and_sort(updated, column, order)
+	@run_in_main_thread
+	def _commit_sort_updates_and_sort(self, updated, column, order):
+		for i, new_row in updated.items():
+			self._rows[i] = new_row
+			self._files[new_row.url] = new_row
+		super().sort(column, order)
 	def _sort_value_is_loaded(self, row, column, ascending):
 		try:
 			self.get_sort_value(row, column, ascending)
@@ -287,6 +290,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 				break
 			else:
 				url = join(self._location, file_name)
+				self._fs.clear_cache(url)
 				try:
 					try:
 						file_before = self._files[url]
@@ -378,7 +382,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 		files = []
 		disappeared = []
 		all_loaded = False
-		for row in self._rows:
+		for row in list(self._rows):
 			if self._shutdown:
 				return
 			if time() > end_time:

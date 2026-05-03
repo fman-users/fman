@@ -217,6 +217,7 @@ class CachedIterator:
 	def __init__(self, source):
 		self._source = source
 		self._lock = Lock()
+		self._source_lock = Lock()
 		self._items = []
 		self._item_counts = {}
 	def remove(self, item):
@@ -226,6 +227,8 @@ class CachedIterator:
 		# N.B.: Behaves like set#add(...), not like list#append(...)!
 		with self._lock:
 			self._record(item)
+			if self._item_counts[item] <= 0:
+				self._item_counts[item] = 1
 	def __iter__(self):
 		return _CachedIterator(self)
 	def get_next(self, pointer):
@@ -234,10 +237,18 @@ class CachedIterator:
 				item = self._items[pointer]
 				if self._item_counts[item] > 0:
 					return pointer + 1, item
+		with self._source_lock:
 			while True:
+				with self._lock:
+					for p in range(pointer, len(self._items)):
+						item = self._items[p]
+						if self._item_counts[item] > 0:
+							return p + 1, item
+					pointer = len(self._items)
 				value = next(self._source) # Eventually raises StopIteration
-				if self._record(value):
-					return len(self._items), value
+				with self._lock:
+					if self._record(value):
+						return len(self._items), value
 	def _record(self, value, delta=1):
 		try:
 			self._item_counts[value] += delta

@@ -184,7 +184,7 @@ class _7ZipFileSystem(FileSystem):
 			for info in self._iter_infos(path):
 				if info.path == path_in_zip:
 					return getattr(info, attr)
-				return folder_default
+			return folder_default
 		return self.cache.query(path, attr, compute_value)
 	def _preserve_empty_parent(self, zip_path, path_in_zip):
 		# 7-Zip deletes empty directories that remain after an operation. For

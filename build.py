@@ -49,7 +49,7 @@ def publish():
 		sign_installer()
 		upload()
 	elif is_linux():
-		if is_ubuntu():
+		if is_ubuntu() or linux_distribution() == 'Debian GNU/Linux':
 			freeze()
 			installer()
 			upload()

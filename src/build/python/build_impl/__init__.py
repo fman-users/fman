@@ -25,7 +25,7 @@ def remove_if_exists(file_path):
 
 def copy_python_library(name, dest_dir):
 	library = import_module(name)
-	is_package = re.match(r'^__init__\.pyc?$', basename(library.__file__))
+	is_package = hasattr(library, '__path__')
 	if is_package:
 		package_dir = dirname(library.__file__)
 		copytree(package_dir, join(dest_dir, basename(package_dir)))
@@ -137,7 +137,7 @@ def upload_core_to_github():
 					'commit', '-m',
 					'Source code of the Core plugin in fman ' + version
 				)
-				git('push', '-u', 'origin', 'master', ssh_key=ssh_key)
+				git('push', '-u', 'origin', 'main', ssh_key=ssh_key)
 			tag = 'v' + version
 			git('tag', tag)
 			git('push', 'origin', tag, ssh_key=ssh_key)
