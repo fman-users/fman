@@ -685,7 +685,7 @@ def _from_human_readable(path_or_url, dest_dir, src_dir):
 		splitscheme(path_or_url)
 	except ValueError as no_scheme:
 		dest_scheme, dest_dir_path = splitscheme(dest_dir)
-		if src_dir:
+		if src_dir and not PurePath(path_or_url).is_absolute():
 			src_scheme, src_path = splitscheme(src_dir)
 			dest_path = PurePath(src_path, path_or_url).as_posix()
 			path_or_url = src_scheme + dest_path

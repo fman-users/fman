@@ -94,6 +94,25 @@ class CacheTest(TestCase):
 		t2.join()
 		self.assertEqual(1, results['a'])
 		self.assertEqual(2, results['b'])
+	def test_clear_attr(self):
+		self.cache.put('path', 'keep', 'yes')
+		self.cache.put('path', 'remove', 'no')
+		self.cache.clear_attr('path', 'remove')
+		self.assertEqual('yes', self.cache.get('path', 'keep'))
+		with self.assertRaises(KeyError):
+			self.cache.get('path', 'remove')
+	def test_clear_attr_nonexistent_path(self):
+		self.cache.clear_attr('nonexistent', 'attr')
+	def test_clear_attr_nonexistent_attr(self):
+		self.cache.put('path', 'exists', 1)
+		self.cache.clear_attr('path', 'nope')
+		self.assertEqual(1, self.cache.get('path', 'exists'))
+	def test_clear_attr_allows_recompute(self):
+		self.cache.query('p', 'a', lambda: 'first')
+		self.assertEqual('first', self.cache.get('p', 'a'))
+		self.cache.clear_attr('p', 'a')
+		self.cache.query('p', 'a', lambda: 'second')
+		self.assertEqual('second', self.cache.get('p', 'a'))
 	def test_clear_nonexistent_path(self):
 		self.cache.clear('nonexistent/path')
 	def test_nested_path_put_get(self):

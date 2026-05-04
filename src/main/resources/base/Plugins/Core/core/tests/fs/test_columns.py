@@ -56,6 +56,10 @@ class NameTest(ColumnTest, TestCase):
 		self.assert_is_less('2', 'a1.txt')
 		self.assert_is_less('file.txt', 'file1.txt')
 		self.assert_is_less('02 Google Apps.pdf', '15 Tarsnap.pdf')
+	def test_large_numbers(self):
+		self.assert_is_less('file_123.txt', 'file_1234567.txt')
+		self.assert_is_less('file_999999.txt', 'file_1000000.txt')
+		self.assert_is_less('file_1000000.txt', 'file_9999999.txt')
 	def test_greater(self):
 		self.assert_is_greater('b', 'a')
 	def test_upper_case(self):

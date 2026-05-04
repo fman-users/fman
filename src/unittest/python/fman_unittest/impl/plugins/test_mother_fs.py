@@ -141,6 +141,26 @@ class MotherFileSystemTest(TestCase):
 		self.assertTrue(mother_fs.is_dir('stub://dir'))
 		mother_fs.move('stub://a/b', 'stub://a/../b')
 		self.assertTrue(mother_fs.exists('stub://b'))
+	def test_file_added_clears_parent_stat(self):
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': []}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		mother_fs.is_dir('stub://a')
+		self.assertIsNotNone(fs.cache.get('a', 'is_dir'))
+		mother_fs.touch('stub://a/b')
+		with self.assertRaises(KeyError):
+			fs.cache.get('a', 'stat')
+	def test_file_removed_clears_parent_stat(self):
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': ['b']},
+			'a/b': {}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		mother_fs.is_dir('stub://a')
+		mother_fs.delete('stub://a/b')
+		with self.assertRaises(KeyError):
+			fs.cache.get('a', 'stat')
 	def test_iterdir_returns_cached_iterator(self):
 		fs = StubFileSystem({
 			'a': {'is_dir': True, 'files': ['b', 'c']}
