@@ -14,7 +14,7 @@ with the GUI.
 
 NSIS:
 =====
-Install version 2.51 on Windows.
+Install NSIS 3.x on Windows.
 Add to PATH.
 
 Linux (Ubuntu) extra

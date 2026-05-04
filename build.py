@@ -10,7 +10,6 @@ from fbs.builtin_commands import clean
 from fbs.cmdline import command
 from fbs_runtime.platform import is_windows, is_mac, is_linux, is_ubuntu, \
 	is_fedora, is_arch_linux, linux_distribution
-from os.path import dirname
 
 import fbs.cmdline
 import re
@@ -112,18 +111,18 @@ def release():
 							'    python build.py post_release\n'
 							% release_tag
 						)
-					except:
+					except Exception:
 						git('push', '--delete', 'origin', release_tag)
 						raise
-				except:
+				except Exception:
 					git('revert', '--no-edit', revision_before + '..HEAD' )
 					git('push', '-u', 'origin', 'main')
 					revision_before = git('rev-parse', 'HEAD').rstrip()
 					raise
-			except:
+			except Exception:
 				git('tag', '-d', release_tag)
 				raise
-		except:
+		except Exception:
 			git('reset', revision_before)
 			_replace_in_json(settings_path, 'version', version)
 			raise

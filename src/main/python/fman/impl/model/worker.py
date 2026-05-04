@@ -26,11 +26,13 @@ class Worker:
 		with self._shutdown_lock:
 			self._shutdown = True
 			self._queue.put(WorkItem(0, lambda: None))
-		self._thread.join()
+		if self._thread.is_alive():
+			self._thread.join()
 	def _run(self):
 		while True:
 			task = self._queue.get()
 			if task.is_shutdown():
+				self._queue.task_done()
 				break
 			task.run()
 			self._queue.task_done()

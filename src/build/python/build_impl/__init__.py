@@ -54,7 +54,7 @@ def upload_file(f, dest_dir, dest_name=None):
 		run(args, check=True)
 	else:
 		if isdir(f):
-			copytree(f, join(dest_dir, dest_name or basename(f)))
+			copytree(f, join(dest_path, dest_name or basename(f)))
 		else:
 			copy(f, dest_path)
 
@@ -105,7 +105,7 @@ def upload_core_to_github():
 	ssh_key = path('${core_plugin_ssh_key}')
 	if not is_windows():
 		# Prevent clone failing due to lacking access restrictions:
-		run(['chmod', '600', ssh_key])
+		run(['chmod', '600', ssh_key], check=True)
 	with TemporaryDirectory() as tmp_dir:
 		cwd_before = getcwd()
 		chdir(tmp_dir)

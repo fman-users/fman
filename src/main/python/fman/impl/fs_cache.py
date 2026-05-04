@@ -1,36 +1,40 @@
 from collections import defaultdict
-from threading import Lock
+from threading import Lock, RLock
 
 class Cache:
 	def __init__(self):
+		self._lock = Lock()
 		self._root = CacheItem()
 	def put(self, path, attr, value):
-		self._root.update_child(path).put(attr, value)
+		with self._lock:
+			self._root.update_child(path).put(attr, value)
 	def get(self, path, attr):
-		return self._root.get_child(path).get(attr)
+		with self._lock:
+			return self._root.get_child(path).get(attr)
 	def query(self, path, attr, compute_value):
-		return self._root.update_child(path).query(attr, compute_value)
+		with self._lock:
+			item = self._root.update_child(path)
+		return item.query(attr, compute_value)
 	def clear(self, path):
-		if not path:
-			self._root = CacheItem()
-		else:
-			try:
-				self._root.delete_child(path)
-			except KeyError:
-				pass
+		with self._lock:
+			if not path:
+				self._root = CacheItem()
+			else:
+				try:
+					self._root.delete_child(path)
+				except KeyError:
+					pass
 
 class CacheItem:
 	def __init__(self):
 		self._children = {}
 		self._attrs = {}
-		self._attr_locks = defaultdict(Lock)
+		self._attr_locks = defaultdict(RLock)
 	def put(self, attr, value):
 		self._attrs[attr] = value
 	def get(self, attr):
 		return self._attrs[attr]
 	def query(self, attr, compute_value):
-		# Because `defaultdict` and `Lock` are implemented in C, they do not
-		# release the GIL and the dict access is atomic:
 		with self._attr_locks[attr]:
 			try:
 				return self._attrs[attr]

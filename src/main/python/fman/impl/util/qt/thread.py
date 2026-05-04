@@ -54,11 +54,14 @@ class Executor:
 			return cls._INSTANCE
 	def __init__(self, app):
 		self._pending_tasks = []
+		self._pending_tasks_lock = Lock()
 		self._app_is_about_to_quit = False
 		app.aboutToQuit.connect(self._about_to_quit)
 	def _about_to_quit(self):
 		self._app_is_about_to_quit = True
-		for task in self._pending_tasks:
+		with self._pending_tasks_lock:
+			tasks = list(self._pending_tasks)
+		for task in tasks:
 			task.set_exception(SystemExit())
 			task.has_run.set()
 	def run_in_thread(self, thread, f, args, kwargs):
@@ -70,7 +73,8 @@ class Executor:
 			# submitted to the event loop via signals/slots) is never run.
 			raise SystemExit()
 		task = Task(f, args, kwargs)
-		self._pending_tasks.append(task)
+		with self._pending_tasks_lock:
+			self._pending_tasks.append(task)
 		try:
 			receiver = Receiver(task)
 			receiver.moveToThread(thread)
@@ -80,7 +84,8 @@ class Executor:
 			task.has_run.wait()
 			return task.result
 		finally:
-			self._pending_tasks.remove(task)
+			with self._pending_tasks_lock:
+				self._pending_tasks.remove(task)
 
 class Task:
 	def __init__(self, fn, args, kwargs):

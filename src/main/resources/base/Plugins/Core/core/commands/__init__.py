@@ -400,6 +400,8 @@ _quiet = {'stdout': DEVNULL, 'stderr': DEVNULL}
 class OpenSelectedFiles(DirectoryPaneCommand):
 	def __call__(self):
 		file_under_cursor = self.pane.get_file_under_cursor()
+		if not file_under_cursor:
+			return
 		selected_files = self.pane.get_selected_files()
 		if file_under_cursor in selected_files:
 			_open_files(selected_files, self.pane)
@@ -684,12 +686,12 @@ def _from_human_readable(path_or_url, dest_dir, src_dir):
 	except ValueError as no_scheme:
 		dest_scheme, dest_dir_path = splitscheme(dest_dir)
 		if src_dir:
-			# Treat dest as relative to src_dir:
 			src_scheme, src_path = splitscheme(src_dir)
 			dest_path = PurePath(src_path, path_or_url).as_posix()
+			path_or_url = src_scheme + dest_path
 		else:
 			dest_path = PurePath(dest_dir_path, path_or_url).as_posix()
-		path_or_url = dest_scheme + dest_path
+			path_or_url = dest_scheme + dest_path
 	return path_or_url
 
 def _split(url):
@@ -1430,6 +1432,8 @@ class InstallPlugin(ApplicationCommand):
 					description=repo.description
 				)
 	def _install_plugin(self, name, zipball_contents):
+		if os.sep in name or '/' in name or '..' in name:
+			raise ValueError('Invalid plugin name: %s' % name)
 		os.makedirs(_THIRDPARTY_PLUGINS_DIR, exist_ok=True)
 		dest_dir = os.path.join(_THIRDPARTY_PLUGINS_DIR, name)
 		dest_dir_url = as_url(dest_dir)

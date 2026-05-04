@@ -7,12 +7,15 @@ from importlib.machinery import SourceFileLoader
 from inspect import getmro
 from json import JSONDecodeError
 from os.path import join, isdir, basename, isfile
+from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
 
 import inspect
 import json
 import re
 import sys
+
+_listener_executor = ThreadPoolExecutor(max_workers=4)
 
 class Plugin:
 	def __init__(
@@ -274,6 +277,7 @@ class ReportExceptions:
 		if isinstance(exc_val, SystemExit):
 			exc_code = 0 if exc_val.code is None else exc_val.code
 			self._error_handler.handle_system_exit(exc_code)
+			return True
 		for exclude_class in self._exclude:
 			if isinstance(exc_val, exclude_class):
 				break
@@ -301,9 +305,7 @@ class ListenerWrapper(Wrapper):
 	def on_location_bar_clicked(self, *args):
 		self._notify_listener('on_location_bar_clicked', *args)
 	def _notify_listener(self, *args):
-		Thread(
-			target=self._notify_listener_in_thread, args=args, daemon=True
-		).start()
+		_listener_executor.submit(self._notify_listener_in_thread, *args)
 	def _notify_listener_in_thread(self, event, *args):
 		listener_method = getattr(self._wrapped, event)
 		with self._report_exceptions():

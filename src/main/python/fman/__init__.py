@@ -70,7 +70,7 @@ class DirectoryPane:
 	def _add_listener(self, listener):
 		self._listeners.append(listener)
 	def _broadcast(self, event, *args):
-		for listener in self._listeners:
+		for listener in list(self._listeners):
 			getattr(listener, event)(*args)
 
 	def get_commands(self):
@@ -79,7 +79,7 @@ class DirectoryPane:
 		if args is None:
 			args = {}
 		while True:
-			for listener in self._listeners:
+			for listener in list(self._listeners):
 				rewritten = listener.on_command(name, args)
 				if rewritten:
 					name, args = rewritten
@@ -120,7 +120,7 @@ class DirectoryPane:
 	def set_path(self, dir_url, callback=None, onerror=_set_path_onerror):
 		args = dir_url, '', True
 		while True:
-			for listener in self._listeners:
+			for listener in list(self._listeners):
 				rewritten = listener.before_location_change(*args)
 				if rewritten and rewritten != args:
 					args = rewritten
@@ -200,6 +200,7 @@ class DirectoryPaneListener:
 	def on_path_changed(self):
 		pass
 	def before_location_change(self, url, sort_column='', ascending=True):
+		"""Return (url, sort_column, ascending) to rewrite, or None to allow."""
 		pass
 	def on_files_dropped(self, file_urls, dest_dir, is_copy_not_move):
 		pass

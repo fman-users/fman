@@ -67,6 +67,9 @@ def notify_file_removed(url):
 	_get_mother_fs().notify_file_removed(url)
 
 class FileSystem:
+	"""Base class for file system plugins. Set scheme to eg. 'ftp://'.
+	Methods receive scheme-stripped paths, except copy/move which get full URLs.
+	"""
 
 	scheme = ''
 
@@ -153,6 +156,7 @@ class FileSystem:
 	def touch(self, path):
 		raise self._operation_not_implemented()
 	def copy(self, src_url, dst_url):
+		"""Unlike other methods, receives full URLs (with scheme), not paths."""
 		raise self._operation_not_implemented()
 	def prepare_copy(self, src_url, dst_url):
 		if self.copy.__func__ is FileSystem.copy:
@@ -163,6 +167,7 @@ class FileSystem:
 			fn=self.copy, args=(src_url, dst_url)
 		)]
 	def move(self, src_url, dst_url):
+		"""Unlike other methods, receives full URLs (with scheme), not paths."""
 		raise self._operation_not_implemented()
 	def prepare_move(self, src_url, dst_url):
 		if self.move.__func__ is FileSystem.move:

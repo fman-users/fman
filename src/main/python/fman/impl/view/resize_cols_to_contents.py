@@ -148,13 +148,21 @@ def _distribute_evenly(width, proportions):
 	total = sum(proportions)
 	if not total:
 		return [0] * len(proportions)
-	return [int(p / total * width) for p in proportions]
+	result = [int(p / total * width) for p in proportions]
+	remainder = width - sum(result)
+	for i in range(remainder):
+		result[i] += 1
+	return result
 
 def _distribute_exponentially(width, proportions):
 	total = sum(p * p for p in proportions)
 	if not total:
 		return [0] * len(proportions)
-	return [int(p * p / total * width) for p in proportions]
+	result = [int(p * p / total * width) for p in proportions]
+	remainder = width - sum(result)
+	for i in range(remainder):
+		result[i] += 1
+	return result
 
 def _resize_column(col, new_size, widths, min_widths, available_width):
 	old_size = widths[col]

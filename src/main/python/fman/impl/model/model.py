@@ -215,6 +215,8 @@ class Model(SortFilterTableModel, DragAndDrop):
 		Tells the model that the given `files` exist and the URLs given in
 		`disappeared` do not exist.
 		"""
+		if self._shutdown:
+			return
 		if disappeared is None:
 			disappeared = []
 		self._begin_transaction()
@@ -227,16 +229,18 @@ class Model(SortFilterTableModel, DragAndDrop):
 	def sort(self, column, order=Qt.AscendingOrder):
 		ascending = order == Qt.AscendingOrder
 		updated = {}
-		for i, row in enumerate(list(self._rows)):
+		for row in list(self._rows):
 			if not self._sort_value_is_loaded(row, column, ascending):
 				new_row = self._load_sort_value(row, column, ascending)
-				updated[i] = new_row
+				updated[row.url] = new_row
 		self._commit_sort_updates_and_sort(updated, column, order)
 	@run_in_main_thread
 	def _commit_sort_updates_and_sort(self, updated, column, order):
-		for i, new_row in updated.items():
-			self._rows[i] = new_row
-			self._files[new_row.url] = new_row
+		for i, row in enumerate(self._rows):
+			if row.url in updated:
+				new_row = updated[row.url]
+				self._rows[i] = new_row
+				self._files[new_row.url] = new_row
 		super().sort(column, order)
 	def _sort_value_is_loaded(self, row, column, ascending):
 		try:
@@ -274,6 +278,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 	@transaction(priority=5)
 	def reload(self):
 		self._fs.clear_cache(self._location)
+		files_snapshot = dict(self._files)
 		files = []
 		try:
 			file_names = iter(self._fs.iterdir(self._location))
@@ -293,7 +298,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 				self._fs.clear_cache(url)
 				try:
 					try:
-						file_before = self._files[url]
+						file_before = files_snapshot[url]
 					except KeyError:
 						file_ = self._init_file(url)
 					else:
@@ -312,6 +317,8 @@ class Model(SortFilterTableModel, DragAndDrop):
 		self._load_remaining_files()
 	@run_in_main_thread
 	def _on_files_reloaded(self, rows):
+		if self._shutdown:
+			return
 		self._files = {
 			row.url: row for row in rows
 		}

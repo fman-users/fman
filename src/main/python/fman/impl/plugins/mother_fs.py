@@ -51,9 +51,9 @@ class MotherFileSystem:
 		child, path = self._split(url)
 		def compute_value():
 			iterator = getattr(child, 'iterdir')(path)
-			if hasattr(iterator, '__next__'):
-				iterator = CachedIterator(iterator)
-			return iterator
+			if not hasattr(iterator, '__next__'):
+				iterator = iter(iterator)
+			return CachedIterator(iterator)
 		return child.cache.query(path, 'iterdir', compute_value)
 	def query(self, url, fs_method_name):
 		child, path = self._split(url)
@@ -199,10 +199,7 @@ class MotherFileSystem:
 		except KeyError:
 			pass
 		else:
-			try:
-				parent_files.remove(basename(url))
-			except ValueError:
-				pass
+			parent_files.remove(basename(url))
 	def _add_to_parent(self, url):
 		parent = dirname(url)
 		child, parent_path = self._split(parent)
