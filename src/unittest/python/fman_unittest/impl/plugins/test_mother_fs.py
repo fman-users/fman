@@ -141,6 +141,31 @@ class MotherFileSystemTest(TestCase):
 		self.assertTrue(mother_fs.is_dir('stub://dir'))
 		mother_fs.move('stub://a/b', 'stub://a/../b')
 		self.assertTrue(mother_fs.exists('stub://b'))
+	def test_iterdir_returns_cached_iterator(self):
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': ['b', 'c']}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		result = mother_fs.iterdir('stub://a')
+		self.assertIsInstance(result, CachedIterator)
+	def test_iterdir_cached_is_same_instance(self):
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': ['b']}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		first = mother_fs.iterdir('stub://a')
+		second = mother_fs.iterdir('stub://a')
+		self.assertIs(first, second)
+	def test_iterdir_list_source_becomes_cached_iterator(self):
+		"""Even when underlying FS returns plain list, iterdir wraps it."""
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': ['x', 'y']}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		result = mother_fs.iterdir('stub://a')
+		self.assertIsInstance(result, CachedIterator)
+		self.assertEqual(Counter(['x', 'y']), Counter(list(result)))
+		self.assertEqual(Counter(['x', 'y']), Counter(list(result)))
 	def _create_mother_fs(self, fs):
 		result = MotherFileSystem(None)
 		result.add_child(fs.scheme, fs)

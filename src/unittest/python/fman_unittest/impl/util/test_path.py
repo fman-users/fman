@@ -41,3 +41,19 @@ class NormalizeTest(TestCase):
 		self.assertEqual('', normalize('.'))
 	def test_pardir_of_subdir(self):
 		self.assertEqual('a', normalize('a/b/..'))
+	def test_multi_level_pardir(self):
+		self.assertEqual('a', normalize('a/b/c/../..'))
+	def test_deep_pardir_chain(self):
+		self.assertEqual('a/d', normalize('a/b/c/../../d'))
+	def test_root_level_pardir(self):
+		self.assertEqual('', normalize('/..'))
+	def test_root_level_double_pardir(self):
+		self.assertEqual('', normalize('/../..'))
+	def test_root_with_path_after_pardir(self):
+		self.assertEqual('/a', normalize('/../a'))
+	def test_empty_path(self):
+		self.assertEqual('', normalize(''))
+	def test_double_slash(self):
+		self.assertEqual('a/b', normalize('a//b'))
+	def test_trailing_slash(self):
+		self.assertEqual('a/b', normalize('a/b/'))

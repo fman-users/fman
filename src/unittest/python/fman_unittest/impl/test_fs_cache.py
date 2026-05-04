@@ -1,5 +1,6 @@
-from fman.impl.fs_cache import Cache
-from threading import Thread
+from fman.impl.fs_cache import Cache, CacheItem
+from collections import defaultdict
+from threading import Thread, Barrier, RLock
 from time import sleep
 from unittest import TestCase
 
@@ -46,6 +47,88 @@ class CacheTest(TestCase):
 		thread_1.join()
 		thread_2.join()
 		self.assertEqual(1, len(calls))
+	def test_query_reentrant_rlock(self):
+		outer_called = []
+		def compute_outer():
+			outer_called.append(1)
+			self.cache.query('nested', 'attr', lambda: 'inner')
+			return 'outer'
+		result = self.cache.query('top', 'val', compute_outer)
+		self.assertEqual('outer', result)
+		self.assertEqual('inner', self.cache.get('nested', 'attr'))
+	def test_concurrent_put_and_clear(self):
+		errors = []
+		barrier = Barrier(2)
+		def writer():
+			barrier.wait()
+			for i in range(100):
+				try:
+					self.cache.put('path/%d' % i, 'attr', i)
+				except Exception as e:
+					errors.append(e)
+		def clearer():
+			barrier.wait()
+			for _ in range(100):
+				try:
+					self.cache.clear('')
+				except Exception as e:
+					errors.append(e)
+		t1 = Thread(target=writer)
+		t2 = Thread(target=clearer)
+		t1.start()
+		t2.start()
+		t1.join()
+		t2.join()
+		self.assertEqual([], errors)
+	def test_concurrent_query_different_paths(self):
+		results = {}
+		barrier = Barrier(2)
+		def query_path(path, value):
+			barrier.wait()
+			results[path] = self.cache.query(path, 'attr', lambda: value)
+		t1 = Thread(target=query_path, args=('a', 1))
+		t2 = Thread(target=query_path, args=('b', 2))
+		t1.start()
+		t2.start()
+		t1.join()
+		t2.join()
+		self.assertEqual(1, results['a'])
+		self.assertEqual(2, results['b'])
+	def test_clear_nonexistent_path(self):
+		self.cache.clear('nonexistent/path')
+	def test_nested_path_put_get(self):
+		self.cache.put('a/b/c', 'val', 42)
+		self.assertEqual(42, self.cache.get('a/b/c', 'val'))
+	def test_clear_parent_clears_children(self):
+		self.cache.put('a/b', 'val', 1)
+		self.cache.clear('a')
+		with self.assertRaises(KeyError):
+			self.cache.get('a/b', 'val')
 	def setUp(self):
 		super().setUp()
 		self.cache = Cache()
+
+class CacheItemTest(TestCase):
+	def test_attr_locks_are_reentrant(self):
+		item = CacheItem()
+		lock = item._attr_locks['test']
+		lock.acquire()
+		acquired = lock.acquire(blocking=False)
+		self.assertTrue(acquired)
+		lock.release()
+		lock.release()
+	def test_update_child_creates_path(self):
+		item = CacheItem()
+		child = item.update_child('a/b/c')
+		child.put('key', 'val')
+		self.assertEqual('val', item.get_child('a/b/c').get('key'))
+	def test_delete_child_nested(self):
+		item = CacheItem()
+		item.update_child('a/b').put('k', 'v')
+		item.delete_child('a/b')
+		with self.assertRaises(KeyError):
+			item.get_child('a/b')
+	def test_get_child_nonexistent(self):
+		item = CacheItem()
+		with self.assertRaises(KeyError):
+			item.get_child('nope')

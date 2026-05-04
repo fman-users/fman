@@ -1,6 +1,7 @@
 from fman.fs import FileSystem
 from fman.impl.plugins.plugin import _get_command_name, \
-	get_command_class_name, FileSystemWrapper
+	get_command_class_name, FileSystemWrapper, ReportExceptions, \
+	_listener_executor
 from fman_unittest.impl.plugins import StubErrorHandler
 from unittest import TestCase
 
@@ -93,6 +94,56 @@ class FileSystemWrapperTest(TestCase):
 	def setUp(self):
 		super().setUp()
 		self._error_handler = StubErrorHandler()
+
+class ReportExceptionsTest(TestCase):
+	def test_no_exception(self):
+		handler = StubErrorHandler()
+		with ReportExceptions(handler, 'msg') as cm:
+			pass
+		self.assertIsNone(cm.exception)
+		self.assertEqual([], handler.error_messages)
+	def test_reports_exception(self):
+		handler = StubErrorHandler()
+		with ReportExceptions(handler, 'something broke'):
+			raise ValueError('bad')
+		self.assertEqual(['something broke'], handler.error_messages)
+	def test_excludes_exception_class(self):
+		handler = StubErrorHandler()
+		with self.assertRaises(StopIteration):
+			with ReportExceptions(handler, 'msg', exclude={StopIteration}):
+				raise StopIteration()
+		self.assertEqual([], handler.error_messages)
+	def test_system_exit_handled(self):
+		handler = StubExitHandler()
+		with ReportExceptions(handler, 'msg'):
+			raise SystemExit(42)
+		self.assertEqual(42, handler.exit_code)
+		self.assertEqual([], handler.error_messages)
+	def test_system_exit_none_code(self):
+		handler = StubExitHandler()
+		with ReportExceptions(handler, 'msg'):
+			raise SystemExit()
+		self.assertEqual(0, handler.exit_code)
+	def test_exclude_must_be_set(self):
+		handler = StubErrorHandler()
+		with self.assertRaises(ValueError):
+			ReportExceptions(handler, 'msg', exclude=StopIteration)
+	def test_exception_stored(self):
+		handler = StubErrorHandler()
+		with ReportExceptions(handler, 'msg') as cm:
+			raise RuntimeError('stored')
+		self.assertIsInstance(cm.exception, RuntimeError)
+
+class ListenerExecutorTest(TestCase):
+	def test_executor_is_bounded(self):
+		self.assertLessEqual(_listener_executor._max_workers, 4)
+
+class StubExitHandler(StubErrorHandler):
+	def __init__(self):
+		super().__init__()
+		self.exit_code = None
+	def handle_system_exit(self, code=0):
+		self.exit_code = code
 
 class StubMotherFileSystem:
 	def __init__(self, columns):

@@ -1,5 +1,5 @@
 from fman.impl.view.resize_cols_to_contents import _get_ideal_column_widths, \
-	_resize_column
+	_resize_column, _distribute_evenly, _distribute_exponentially
 from unittest import TestCase
 
 class GetIdealColumnWidthsTest(TestCase):
@@ -58,3 +58,36 @@ class ResizeColumnTest(TestCase):
 			col, old_size, widths, min_widths, available_width
 		)
 		self.assertEqual(result, actual)
+
+class DistributeEvenlyTest(TestCase):
+	def test_exact_division(self):
+		self.assertEqual([5, 5], _distribute_evenly(10, [1, 1]))
+	def test_remainder_distributed(self):
+		result = _distribute_evenly(10, [1, 1, 1])
+		self.assertEqual(10, sum(result))
+		self.assertTrue(all(r in (3, 4) for r in result))
+	def test_zero_total(self):
+		self.assertEqual([0, 0], _distribute_evenly(10, [0, 0]))
+	def test_single_proportion(self):
+		self.assertEqual([7], _distribute_evenly(7, [3]))
+	def test_weighted(self):
+		result = _distribute_evenly(100, [3, 1])
+		self.assertEqual(100, sum(result))
+		self.assertGreater(result[0], result[1])
+	def test_zero_width(self):
+		self.assertEqual([0, 0], _distribute_evenly(0, [1, 1]))
+
+class DistributeExponentiallyTest(TestCase):
+	def test_exact_division(self):
+		result = _distribute_exponentially(100, [10, 10])
+		self.assertEqual(100, sum(result))
+	def test_remainder_distributed(self):
+		result = _distribute_exponentially(10, [3, 2, 1])
+		self.assertEqual(10, sum(result))
+	def test_zero_total(self):
+		self.assertEqual([0, 0], _distribute_exponentially(10, [0, 0]))
+	def test_larger_proportion_gets_more(self):
+		result = _distribute_exponentially(100, [10, 1])
+		self.assertGreater(result[0], result[1])
+	def test_zero_width(self):
+		self.assertEqual([0, 0], _distribute_exponentially(0, [5, 5]))
