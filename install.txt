@@ -7,7 +7,7 @@ Import developer certificate:
     security import "~/dev/fman/conf/mac/Private key.p12" -k ~/Library/Keychains/login.keychain -P "" -T /usr/bin/codesign
 
 Install a version of XCode that is compatible with your macOS version from
-https://developer.apple.com/download/more/?q=xcode.
+https://developer.apple.com/download/all/?q=xcode.
 
 Code signing usually does not work when invoked via SSH. It prompts for a pw
 with the GUI.

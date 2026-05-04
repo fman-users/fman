@@ -24,18 +24,32 @@ class Cache:
 					self._root.delete_child(path)
 				except KeyError:
 					pass
+	def clear_attr(self, path, attr):
+		with self._lock:
+			try:
+				item = self._root.get_child(path)
+			except KeyError:
+				return
+			item.clear_attr(attr)
 
 class CacheItem:
 	def __init__(self):
 		self._children = {}
 		self._attrs = {}
-		self._attr_locks = defaultdict(RLock)
+		self._attr_locks = {}
+		self._attr_locks_lock = Lock()
 	def put(self, attr, value):
 		self._attrs[attr] = value
 	def get(self, attr):
 		return self._attrs[attr]
+	def clear_attr(self, attr):
+		self._attrs.pop(attr, None)
 	def query(self, attr, compute_value):
-		with self._attr_locks[attr]:
+		with self._attr_locks_lock:
+			if attr not in self._attr_locks:
+				self._attr_locks[attr] = RLock()
+			lock = self._attr_locks[attr]
+		with lock:
 			try:
 				return self._attrs[attr]
 			except KeyError:

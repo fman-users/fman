@@ -25,9 +25,9 @@ RUN apt-get install gobject-introspection libgtk-3-0 -y
 
 # Set up virtual environment:
 ADD *.txt /tmp/requirements/
-RUN python3.9 -m venv venv && \
-    venv/bin/python -m pip install -U pip && \
-    venv/bin/python -m pip install -r "/tmp/requirements/${requirements}"
+RUN python3.9 -m venv .venv && \
+    .venv/bin/python -m pip install -U pip && \
+    .venv/bin/python -m pip install -r "/tmp/requirements/${requirements}"
 RUN rm -rf /tmp/requirements/
 
 ADD .bashrc /root/.bashrc

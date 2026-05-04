@@ -111,6 +111,7 @@ class CacheTest(TestCase):
 class CacheItemTest(TestCase):
 	def test_attr_locks_are_reentrant(self):
 		item = CacheItem()
+		item.query('test', lambda: 'val')
 		lock = item._attr_locks['test']
 		lock.acquire()
 		acquired = lock.acquire(blocking=False)

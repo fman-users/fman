@@ -79,7 +79,7 @@ def run_on_server(command):
 		return check_output_decode(command, shell=True)
 
 def check_output_decode(*args, **kwargs):
-	return check_output(*args, **kwargs).decode(sys.stdout.encoding)
+	return check_output(*args, **kwargs).decode(sys.stdout.encoding or 'utf-8')
 
 def upload_installer_to_aws(installer_name):
 	assert SETTINGS['release']

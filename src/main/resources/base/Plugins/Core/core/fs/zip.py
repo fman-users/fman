@@ -579,7 +579,10 @@ class Run7ZipViaPty:
 	def kill(self):
 		os.kill(self._pid, signal.SIGTERM)
 	def wait(self):
-		return os.waitpid(self._pid, 0)[1]
+		status = os.waitpid(self._pid, 0)[1]
+		if os.WIFEXITED(status):
+			return os.WEXITSTATUS(status)
+		return status
 	def _spawn(self, argv, cwd=None, env=None):
 		# Copied and adapted from pty.spawn(...).
 		import pty # <- import late because pty is not available on Windows.

@@ -179,9 +179,11 @@ class MotherFileSystem:
 		child.notify_file_removed(path)
 	def _on_file_added(self, url):
 		self._add_to_parent(url)
+		self._clear_parent_stat(url)
 		self.file_added.trigger(url)
 	def _on_file_removed(self, url):
 		self._remove(url)
+		self._clear_parent_stat(url)
 		self.file_removed.trigger(url)
 	def _split(self, url):
 		scheme, path = splitscheme(url)
@@ -200,6 +202,14 @@ class MotherFileSystem:
 			pass
 		else:
 			parent_files.remove(basename(url))
+	def _clear_parent_stat(self, url):
+		parent = dirname(url)
+		try:
+			child, parent_path = self._split(parent)
+		except FileNotFoundError:
+			return
+		for attr in ('stat', 'icon'):
+			child.cache.clear_attr(parent_path, attr)
 	def _add_to_parent(self, url):
 		parent = dirname(url)
 		child, parent_path = self._split(parent)

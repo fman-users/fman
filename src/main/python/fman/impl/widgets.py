@@ -302,9 +302,9 @@ class MainWindow(QMainWindow):
 			return
 		help_menu_text = 'Help'
 		if is_mac():
-				# On OS X, any menu named "Help" has the "Spotlight search for
+				# On macOS, any menu named "Help" has the "Spotlight search for
 				# Help" bar displayed in it. We don't need or want this. Add an
-				# invisible character to fool OS X into not treating it as
+				# invisible character to fool macOS into not treating it as
 				# "Help" (' ' doesn't work):
 				help_menu_text += '\u2063'
 		help_menu = self.menuBar().addMenu(help_menu_text)
@@ -422,16 +422,16 @@ class MainWindow(QMainWindow):
 		overlay.show()
 	def _position_overlay(self, overlay):
 		if self._dialog is None:
-			pos_x = (self.width() - overlay.width()) / 2
-			pos_y = (self.height() - overlay.height()) / 2
+			pos_x = (self.width() - overlay.width()) // 2
+			pos_y = (self.height() - overlay.height()) // 2
 		else:
 			dialog_pos = self._dialog.pos()
 			pos_x = dialog_pos.x() - self.pos().x() + self._dialog.width() + 30
 			pos_y = dialog_pos.y() - self.pos().y() + self._dialog.height() + 30
 			right_margin = self.width() - pos_x - overlay.width()
 			if right_margin / self.width() < 0.1:
-				pos_x = 0.9 * self.width() - overlay.width()
-		overlay.move(pos_x, pos_y)
+				pos_x = int(0.9 * self.width() - overlay.width())
+		overlay.move(int(pos_x), int(pos_y))
 	def saveState(self, version=0):
 		self_state = super().saveState(version)
 		splitter_state = self._splitter.saveState()

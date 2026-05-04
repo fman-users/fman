@@ -113,6 +113,8 @@ class Quicksearch(QDialog):
 	def _adjust_item_list_ize(self, min_num_items_to_display=7):
 		num_items = len(self._curr_items)
 		row_height = self._items.sizeHintForRow(0)
+		if row_height <= 0:
+			return
 		max_height = num_items * row_height
 		self._items.setMaximumHeight(max_height)
 		if num_items >= min_num_items_to_display:
