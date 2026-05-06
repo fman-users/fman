@@ -345,6 +345,19 @@ class CachedIteratorTest(TestCase):
 			iterable.append(i)
 		results_before = list(iterable)
 		self.assertEqual(Counter(range(100)), Counter(results_before))
+	def test_get_next_pointer_after_all_removed(self):
+		"""get_next must advance pointer past cached items when all are dead."""
+		iterable = CachedIterator(self._generate(1, 2, 3, 4))
+		iterator = iter(iterable)
+		self.assertEqual(1, next(iterator))
+		self.assertEqual(2, next(iterator))
+		iterable.remove(3)
+		iterable.remove(4)
+		iterable.append(5)
+		result = list(iterator)
+		self.assertIn(5, result)
+		self.assertNotIn(3, result)
+		self.assertNotIn(4, result)
 	def _generate(self, *args):
 		yield from args
 	def _generate_slowly(self, *args):
