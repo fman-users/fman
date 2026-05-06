@@ -36,7 +36,10 @@ FMAN_VERSION = ''
 PLATFORM = platform.name()
 
 if PLATFORM == 'Windows':
-	DATA_DIRECTORY = join(getenv('APPDATA'), 'fman')
+	_appdata = getenv('APPDATA')
+	if not _appdata:
+		raise RuntimeError('APPDATA environment variable is not set')
+	DATA_DIRECTORY = join(_appdata, 'fman')
 elif PLATFORM == 'Mac':
 	DATA_DIRECTORY = expanduser('~/Library/Application Support/fman')
 elif PLATFORM == 'Linux':

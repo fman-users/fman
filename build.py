@@ -135,7 +135,8 @@ snapshot_suffix = '-SNAPSHOT'
 def post_release():
 	activate_profile('release')
 	version = SETTINGS['version']
-	assert not version.endswith(snapshot_suffix)
+	if version.endswith(snapshot_suffix):
+		raise ValueError('Cannot post_release a SNAPSHOT version: %s' % version)
 	cloudfront_items_to_invalidate = []
 	for item in ('fman.dmg', 'fman.deb', 'fman.pkg.tar.xz', 'fman.rpm'):
 		cloudfront_items_to_invalidate.append(item)

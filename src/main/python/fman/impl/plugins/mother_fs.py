@@ -240,10 +240,11 @@ class CachedIterator:
 		return _CachedIterator(self)
 	def get_next(self, pointer):
 		with self._lock:
-			for pointer in range(pointer, len(self._items)):
-				item = self._items[pointer]
+			for i in range(pointer, len(self._items)):
+				item = self._items[i]
 				if self._item_counts[item] > 0:
-					return pointer + 1, item
+					return i + 1, item
+			pointer = len(self._items)
 		with self._source_lock:
 			while True:
 				with self._lock:

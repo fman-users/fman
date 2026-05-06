@@ -82,7 +82,8 @@ def check_output_decode(*args, **kwargs):
 	return check_output(*args, **kwargs).decode(sys.stdout.encoding or 'utf-8')
 
 def upload_installer_to_aws(installer_name):
-	assert SETTINGS['release']
+	if not SETTINGS['release']:
+		raise RuntimeError('upload_installer_to_aws called in non-release mode')
 	src_path = path('target/' + installer_name)
 	upload_to_s3(src_path, installer_name)
 	version_dest_path = '%s/%s' % (SETTINGS['version'], installer_name)
@@ -118,7 +119,7 @@ def upload_core_to_github():
 					if not line.startswith('#') and line.rstrip()
 				}
 			for name in listdir(tmp_dir):
-				if name not in extra_files:
+				if name not in extra_files and name != '.git':
 					if isdir(name):
 						rmtree(name)
 					else:
@@ -146,8 +147,11 @@ def upload_core_to_github():
 
 def record_release_on_server():
 	import requests
-	response = requests.post(SETTINGS['record_release_url'], {
+	url = SETTINGS['record_release_url']
+	if not url.startswith('https://'):
+		raise ValueError('record_release_url must use HTTPS')
+	response = requests.post(url, {
 		'secret': SETTINGS['server_api_secret'],
 		'version': SETTINGS['version']
-	})
+	}, timeout=30)
 	response.raise_for_status()

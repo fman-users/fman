@@ -260,7 +260,9 @@ class FilterBar(QFrame):
 	def _on_text_changed(self, text):
 		text_re = '.*'.join(map(re.escape, text.split('*')))
 		self._filter_re = re.compile(text_re, re.I)
-		self._model.sourceModel().update()
+		source = self._model.sourceModel()
+		if source:
+			source.update()
 	def _accepts(self, url):
 		return bool(self._filter_re.search(basename(url)))
 

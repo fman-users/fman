@@ -151,6 +151,8 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 	def find(self, url):
 		return self.mapFromSource(self.sourceModel().find(url))
 	def _on_file_removed(self, url):
+		if not self.sourceModel():
+			return
 		if is_pardir(url, self.get_location()):
 			dir_ = dirname(url)
 			if dir_ == url:

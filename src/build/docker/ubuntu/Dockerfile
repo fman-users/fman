@@ -16,7 +16,7 @@ RUN apt-get install libgl1-mesa-glx -y
 
 # fpm:
 RUN apt-get install ruby ruby-dev build-essential -y && \
-    gem install --no-ri --no-rdoc fpm
+    gem install --no-document fpm
 
 WORKDIR /root/${app_name}
 

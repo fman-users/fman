@@ -278,7 +278,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 	@transaction(priority=5)
 	def reload(self):
 		self._fs.clear_cache(self._location)
-		files_snapshot = dict(self._files)
+		files_snapshot = self._files.copy()
 		files = []
 		try:
 			file_names = iter(self._fs.iterdir(self._location))
