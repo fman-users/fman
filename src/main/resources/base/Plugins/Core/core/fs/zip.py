@@ -184,7 +184,7 @@ class _7ZipFileSystem(FileSystem):
 			for info in self._iter_infos(path):
 				if info.path == path_in_zip:
 					return getattr(info, attr)
-				return folder_default
+			return folder_default
 		return self.cache.query(path, attr, compute_value)
 	def _preserve_empty_parent(self, zip_path, path_in_zip):
 		# 7-Zip deletes empty directories that remain after an operation. For
@@ -579,7 +579,10 @@ class Run7ZipViaPty:
 	def kill(self):
 		os.kill(self._pid, signal.SIGTERM)
 	def wait(self):
-		return os.waitpid(self._pid, 0)[1]
+		status = os.waitpid(self._pid, 0)[1]
+		if os.WIFEXITED(status):
+			return os.WEXITSTATUS(status)
+		return status
 	def _spawn(self, argv, cwd=None, env=None):
 		# Copied and adapted from pty.spawn(...).
 		import pty # <- import late because pty is not available on Windows.

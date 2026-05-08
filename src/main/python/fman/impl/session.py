@@ -41,8 +41,7 @@ class SessionManager:
 			pane_infos = [{}] * self.DEFAULT_NUM_PANES
 		panes = [window.add_pane() for _ in range(len(pane_infos))]
 		self._show_startup_messages(main_window)
-		is_first_run = not self._settings
-		if is_first_run:
+		if self.is_first_run:
 			main_window.showMaximized()
 		else:
 			# In this case, we assume that _restore_window_geometry restored the
@@ -156,7 +155,7 @@ class SessionManager:
 		try:
 			self._settings.flush()
 		except OSError:
-			pass
+			_LOG.warning('Failed to save settings', exc_info=True)
 	def _read_pane_settings(self, pane):
 		return {
 			'location': pane.get_location(),

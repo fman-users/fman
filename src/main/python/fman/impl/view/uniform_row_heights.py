@@ -18,7 +18,7 @@ class UniformRowHeights(QTableView):
 		return self.get_row_height()
 	def get_row_height(self):
 		if self._row_height is None:
-			self._row_height = max(self._get_cell_heights())
+			self._row_height = max(self._get_cell_heights(), default=-1)
 		return self._row_height
 	def changeEvent(self, event):
 		# This for instance happens when the style sheet changed. It may affect

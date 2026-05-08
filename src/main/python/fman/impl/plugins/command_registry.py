@@ -3,7 +3,10 @@ from fman.impl.plugins.plugin import ReportExceptions
 from threading import Thread, get_ident
 from weakref import WeakKeyDictionary
 
+import logging
 import re
+
+_LOG = logging.getLogger(__name__)
 
 class CommandRegistry:
 	def __init__(self, main_thread_id=None):
@@ -61,11 +64,10 @@ class ApplicationCommandRegistry(CommandRegistry):
 		class_name = command.__class__.__name__
 		self._callback.before_command(class_name)
 		msg_on_err = 'Command %r raised error.' % class_name
-		try:
-			with ReportExceptions(self._error_handler, msg_on_err):
-				command(**args)
-		except Exception:
-			pass
+		with ReportExceptions(self._error_handler, msg_on_err) as cm:
+			command(**args)
+		if cm.exception:
+			_LOG.debug('Command %s failed', class_name, exc_info=True)
 		else:
 			self._callback.after_command(class_name)
 
@@ -123,11 +125,10 @@ class PaneCommandRegistry(CommandRegistry):
 		self._callback.before_command(class_name)
 		with self._set_context(pane, file_under_cursor):
 			msg_on_err = 'Command %r raised error.' % class_name
-			try:
-				with ReportExceptions(self._error_handler, msg_on_err):
-					command(**args)
-			except Exception:
-				pass
+			with ReportExceptions(self._error_handler, msg_on_err) as cm:
+				command(**args)
+			if cm.exception:
+				_LOG.debug('Command %s failed', class_name, exc_info=True)
 			else:
 				self._callback.after_command(class_name)
 	def _get_command(self, pane, name):

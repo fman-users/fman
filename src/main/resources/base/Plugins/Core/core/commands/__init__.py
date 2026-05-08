@@ -160,7 +160,7 @@ class _Delete(Task):
 					self.show_alert(message)
 				else:
 					message += ' Do you want to continue?'
-					choice = show_alert(message, YES | NO | YES_TO_ALL)
+					choice = self.show_alert(message, YES | NO | YES_TO_ALL)
 					if choice & NO:
 						break
 					if choice & YES_TO_ALL:
@@ -400,6 +400,8 @@ _quiet = {'stdout': DEVNULL, 'stderr': DEVNULL}
 class OpenSelectedFiles(DirectoryPaneCommand):
 	def __call__(self):
 		file_under_cursor = self.pane.get_file_under_cursor()
+		if not file_under_cursor:
+			return
 		selected_files = self.pane.get_selected_files()
 		if file_under_cursor in selected_files:
 			_open_files(selected_files, self.pane)
@@ -683,13 +685,13 @@ def _from_human_readable(path_or_url, dest_dir, src_dir):
 		splitscheme(path_or_url)
 	except ValueError as no_scheme:
 		dest_scheme, dest_dir_path = splitscheme(dest_dir)
-		if src_dir:
-			# Treat dest as relative to src_dir:
+		if src_dir and not PurePath(path_or_url).is_absolute():
 			src_scheme, src_path = splitscheme(src_dir)
 			dest_path = PurePath(src_path, path_or_url).as_posix()
+			path_or_url = src_scheme + dest_path
 		else:
 			dest_path = PurePath(dest_dir_path, path_or_url).as_posix()
-		path_or_url = dest_scheme + dest_path
+			path_or_url = dest_scheme + dest_path
 	return path_or_url
 
 def _split(url):
@@ -935,7 +937,6 @@ class OpenNativeFileManager(DirectoryPaneCommand):
 class CopyPathsToClipboard(DirectoryPaneCommand):
 	def __call__(self):
 		to_copy = self.get_chosen_files() or [self.pane.get_path()]
-		files = '\n'.join(to_copy)
 		clipboard.clear()
 		clipboard.set_text('\n'.join(map(as_human_readable, to_copy)))
 		_report_clipboard_action('Copied', to_copy, ' to the clipboard', 'path')
@@ -1315,11 +1316,15 @@ class OpenDataDirectory(DirectoryPaneCommand):
 
 class GoBack(DirectoryPaneCommand):
 	def __call__(self):
-		HistoryListener.INSTANCES[self.pane].go_back()
+		history = HistoryListener.INSTANCES.get(self.pane)
+		if history:
+			history.go_back()
 
 class GoForward(DirectoryPaneCommand):
 	def __call__(self):
-		HistoryListener.INSTANCES[self.pane].go_forward()
+		history = HistoryListener.INSTANCES.get(self.pane)
+		if history:
+			history.go_forward()
 
 class HistoryListener(DirectoryPaneListener):
 
@@ -1440,7 +1445,13 @@ class InstallPlugin(ApplicationCommand):
 			with open(zip_path, 'wb') as f:
 				f.write(zipball_contents)
 			zip_url = as_url(zip_path, 'zip://')
-			dir_in_zip, = iterdir(zip_url)
+			dirs_in_zip = list(iterdir(zip_url))
+			if len(dirs_in_zip) != 1:
+				raise ValueError(
+					'Expected one top-level directory in zip, got %d'
+					% len(dirs_in_zip)
+				)
+			dir_in_zip = dirs_in_zip[0]
 			copy(join(zip_url, dir_in_zip), dest_dir_url)
 		return dest_dir
 	def _load_installed_plugin(self, plugin_dir):
