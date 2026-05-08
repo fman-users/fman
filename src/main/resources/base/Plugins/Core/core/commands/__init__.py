@@ -1099,7 +1099,32 @@ class ToggleParentDirEntry(DirectoryPaneCommand):
 			show_status_message('Parent directory entry disabled.')
 
 class InitParentDirEntry(DirectoryPaneListener):
+	def __init__(self, pane):
+		super().__init__(pane)
+		self._transaction_callback_added = False
+		self._ensure_model_watcher()
+
+	def _ensure_model_watcher(self):
+		if self._transaction_callback_added:
+			return
+		widget = self.pane._widget
+		if hasattr(widget, '_model'):
+			try:
+				widget._model.transaction_ended.connect(self._on_transaction_ended)
+				self._transaction_callback_added = True
+			except (AttributeError, TypeError):
+				pass
+
+	def _on_transaction_ended(self):
+		if _is_parent_dir_entry_enabled(self.pane):
+			from threading import Thread
+			pane = self.pane
+			Thread(target=_inject_parent_dir_entry, args=(pane,),
+				   daemon=True).start()
+
 	def on_path_changed(self):
+		self._transaction_callback_added = False
+		self._ensure_model_watcher()
 		if _is_parent_dir_entry_enabled(self.pane):
 			from threading import Thread
 			pane = self.pane
