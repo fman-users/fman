@@ -53,7 +53,8 @@ class ComputeDiff:
 	def _update_row(self, i, row):
 		self._result.append(DiffEntry(i, i + 1, i, [row]))
 		self._old_rows[i] = row
-		assert self._key_fn(row) == self._old_keys[i]
+		if self._key_fn(row) != self._old_keys[i]:
+			raise RuntimeError('Key mismatch after update')
 
 def join(diff_entries):
 	if not diff_entries:
@@ -135,8 +136,10 @@ class DiffEntry(ConstructorMixin, EqMixin, ReprMixin):
 	def _type(self):
 		if self._does_cut:
 			if self.rows:
-				assert len(self.rows) == self.cut_end - self.cut_start
-				assert self.cut_start == self.insert_start
+				if len(self.rows) != self.cut_end - self.cut_start:
+					raise RuntimeError('Row count mismatch in update entry')
+				if self.cut_start != self.insert_start:
+					raise RuntimeError('cut_start != insert_start in update entry')
 				return 'update'
 			else:
 				if self.insert_start != -1:
@@ -144,8 +147,10 @@ class DiffEntry(ConstructorMixin, EqMixin, ReprMixin):
 				else:
 					return 'remove'
 		else:
-			assert self.rows
-			assert self.insert_start != -1
+			if not self.rows:
+				raise RuntimeError('Insert entry has no rows')
+			if self.insert_start == -1:
+				raise RuntimeError('Insert entry has no insert_start')
 			return 'insert'
 	@property
 	def _does_cut(self):

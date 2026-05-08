@@ -6,6 +6,7 @@ from fbs_runtime import platform
 from os import getenv
 from os.path import join, expanduser
 from PyQt5.QtWidgets import QMessageBox
+from threading import local as _thread_local
 
 import re
 
@@ -36,7 +37,10 @@ FMAN_VERSION = ''
 PLATFORM = platform.name()
 
 if PLATFORM == 'Windows':
-	DATA_DIRECTORY = join(getenv('APPDATA'), 'fman')
+	_appdata = getenv('APPDATA')
+	if not _appdata:
+		raise RuntimeError('APPDATA environment variable is not set')
+	DATA_DIRECTORY = join(_appdata, 'fman')
 elif PLATFORM == 'Mac':
 	DATA_DIRECTORY = expanduser('~/Library/Application Support/fman')
 elif PLATFORM == 'Linux':
@@ -57,7 +61,7 @@ class ApplicationCommand:
 def _set_path_onerror(e, url):
 	if isinstance(e, FileNotFoundError):
 		return dirname(url)
-	raise
+	raise e
 
 class DirectoryPane:
 	def __init__(self, window, widget, command_registry):
@@ -65,12 +69,12 @@ class DirectoryPane:
 		self._widget = widget
 		self._command_registry = command_registry
 		self._listeners = []
-		self._get_file_under_cursor_orig = self.get_file_under_cursor
+		self._file_under_cursor_override = _thread_local()
 
 	def _add_listener(self, listener):
 		self._listeners.append(listener)
 	def _broadcast(self, event, *args):
-		for listener in self._listeners:
+		for listener in list(self._listeners):
 			getattr(listener, event)(*args)
 
 	def get_commands(self):
@@ -79,7 +83,7 @@ class DirectoryPane:
 		if args is None:
 			args = {}
 		while True:
-			for listener in self._listeners:
+			for listener in list(self._listeners):
 				rewritten = listener.on_command(name, args)
 				if rewritten:
 					name, args = rewritten
@@ -100,6 +104,9 @@ class DirectoryPane:
 	def get_selected_files(self):
 		return self._widget.get_selected_files()
 	def get_file_under_cursor(self):
+		override = getattr(self._file_under_cursor_override, 'value', None)
+		if override is not None:
+			return override
 		return self._widget.get_file_under_cursor()
 	def move_cursor_down(self, toggle_selection=False):
 		self._widget.move_cursor_down(toggle_selection)
@@ -115,14 +122,12 @@ class DirectoryPane:
 		self._widget.move_cursor_page_up(toggle_selection)
 	def place_cursor_at(self, file_url):
 		self._widget.place_cursor_at(file_url)
-	# TODO: Rename to get_location()
 	def get_path(self):
 		return self._widget.get_location()
-	# TODO: Rename to set_location(...)
 	def set_path(self, dir_url, callback=None, onerror=_set_path_onerror):
 		args = dir_url, '', True
 		while True:
-			for listener in self._listeners:
+			for listener in list(self._listeners):
 				rewritten = listener.before_location_change(*args)
 				if rewritten and rewritten != args:
 					args = rewritten
@@ -156,9 +161,11 @@ class DirectoryPane:
 		return self._widget.hasFocus()
 	@contextmanager
 	def _override_file_under_cursor(self, value):
-		self.get_file_under_cursor = lambda: value
-		yield
-		self.get_file_under_cursor = self._get_file_under_cursor_orig
+		self._file_under_cursor_override.value = value
+		try:
+			yield
+		finally:
+			self._file_under_cursor_override.value = None
 
 class Window:
 	def __init__(self, widget, panecmd_registry):
@@ -199,10 +206,10 @@ class DirectoryPaneListener:
 		pass
 	def on_name_edited(self, file_url, new_name):
 		pass
-	# TODO: Rename to after_location_change()
 	def on_path_changed(self):
 		pass
 	def before_location_change(self, url, sort_column='', ascending=True):
+		"""Return (url, sort_column, ascending) to rewrite, or None to allow."""
 		pass
 	def on_files_dropped(self, file_urls, dest_dir, is_copy_not_move):
 		pass
@@ -275,7 +282,7 @@ def unload_plugin(plugin_path):
 
 class Task:
 
-	class Canceled(KeyboardInterrupt):
+	class Canceled(Exception):
 		pass
 
 	def __init__(self, title, size=0, fn=lambda: None, args=(), kwargs=None):

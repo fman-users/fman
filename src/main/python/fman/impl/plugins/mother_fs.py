@@ -51,9 +51,9 @@ class MotherFileSystem:
 		child, path = self._split(url)
 		def compute_value():
 			iterator = getattr(child, 'iterdir')(path)
-			if hasattr(iterator, '__next__'):
-				iterator = CachedIterator(iterator)
-			return iterator
+			if not hasattr(iterator, '__next__'):
+				iterator = iter(iterator)
+			return CachedIterator(iterator)
 		return child.cache.query(path, 'iterdir', compute_value)
 	def query(self, url, fs_method_name):
 		child, path = self._split(url)
@@ -170,6 +170,7 @@ class MotherFileSystem:
 		child.cache.clear(path)
 	def notify_file_added(self, url):
 		child, path = self._split(url)
+		child.cache.clear(path)
 		child.notify_file_added(path)
 	def notify_file_changed(self, url):
 		child, path = self._split(url)
@@ -179,9 +180,11 @@ class MotherFileSystem:
 		child.notify_file_removed(path)
 	def _on_file_added(self, url):
 		self._add_to_parent(url)
+		self._clear_parent_stat(url)
 		self.file_added.trigger(url)
 	def _on_file_removed(self, url):
 		self._remove(url)
+		self._clear_parent_stat(url)
 		self.file_removed.trigger(url)
 	def _split(self, url):
 		scheme, path = splitscheme(url)
@@ -194,58 +197,84 @@ class MotherFileSystem:
 		child, path = self._split(url)
 		child.cache.clear(path)
 		parent_path = splitscheme(dirname(url))[1]
+		name = basename(url)
+		child.cache.mutate(parent_path, 'iterdir', lambda ci: ci.remove(name))
+	def _clear_parent_stat(self, url):
+		parent = dirname(url)
 		try:
-			parent_files = child.cache.get(parent_path, 'iterdir')
-		except KeyError:
-			pass
-		else:
-			try:
-				parent_files.remove(basename(url))
-			except ValueError:
-				pass
+			child, parent_path = self._split(parent)
+		except FileNotFoundError:
+			return
+		for attr in ('stat', 'icon'):
+			child.cache.clear_attr(parent_path, attr)
 	def _add_to_parent(self, url):
 		parent = dirname(url)
-		child, parent_path = self._split(parent)
 		try:
-			parent_files = child.cache.get(parent_path, 'iterdir')
-		except KeyError:
-			pass
-		else:
-			parent_files.append(basename(url))
+			child, parent_path = self._split(parent)
+		except FileNotFoundError:
+			return
+		name = basename(url)
+		child.cache.mutate(parent_path, 'iterdir', lambda ci: ci.append(name))
 
+# Lock ordering within CachedIterator:
+#   _lock (protects _items list and _item_counts dict)
+#   _source_lock (serializes source iterator advancement)
+# _lock is never held when acquiring _source_lock. Inside _source_lock,
+# _lock is briefly re-acquired for snapshots — this is safe because no
+# code path holds _lock and then acquires _source_lock.
 class CachedIterator:
 	def __init__(self, source):
 		self._source = source
 		self._lock = Lock()
+		self._source_lock = Lock()
 		self._items = []
 		self._item_counts = {}
 	def remove(self, item):
 		with self._lock:
 			self._record(item, delta=-1)
+			self._item_counts[item] = min(self._item_counts[item], 0)
 	def append(self, item):
 		# N.B.: Behaves like set#add(...), not like list#append(...)!
 		with self._lock:
 			self._record(item)
+			if self._item_counts[item] <= 0:
+				self._item_counts[item] = 1
+			if item not in self._items:
+				self._items.append(item)
 	def __iter__(self):
 		return _CachedIterator(self)
 	def get_next(self, pointer):
+		original_pointer = pointer
 		with self._lock:
-			for pointer in range(pointer, len(self._items)):
-				item = self._items[pointer]
+			for i in range(pointer, len(self._items)):
+				item = self._items[i]
 				if self._item_counts[item] > 0:
-					return pointer + 1, item
+					return i + 1, item
+			pointer = len(self._items)
+		with self._source_lock:
 			while True:
+				with self._lock:
+					for p in range(original_pointer, len(self._items)):
+						item = self._items[p]
+						if self._item_counts[item] > 0:
+							return p + 1, item
+					pointer = len(self._items)
 				value = next(self._source) # Eventually raises StopIteration
-				if self._record(value):
-					return len(self._items), value
+				with self._lock:
+					if self._record(value):
+						return len(self._items), value
 	def _record(self, value, delta=1):
 		try:
-			self._item_counts[value] += delta
-			return False
+			old_count = self._item_counts[value]
+			self._item_counts[value] = old_count + delta
+			return old_count <= 0 and old_count + delta > 0
 		except KeyError:
+			if delta < 0:
+				self._item_counts[value] = delta
+				return False
 			self._items.append(value)
 			self._item_counts[value] = delta
-			return True
+			return delta > 0
 
 class _CachedIterator:
 	def __init__(self, parent):

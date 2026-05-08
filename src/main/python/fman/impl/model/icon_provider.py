@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath
 from PyQt5.QtCore import QFileInfo
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QFileIconProvider
+from threading import Lock
 
 import logging
 import sys
@@ -21,6 +22,7 @@ class IconProvider:
 			f.suffix: self._get_qt_icon(f)
 			for f in Path(cache_dir).glob('file*')
 		}
+		self._cache_lock = Lock()
 	def get_icon(self, url):
 		scheme, path = splitscheme(url)
 		if scheme == 'file://':
@@ -32,14 +34,13 @@ class IconProvider:
 		if self._fs.is_dir(url):
 			return self._folder_icon
 		suffix = PurePosixPath(path).suffix
-		if suffix not in self._cache:
-			surrogate = Path(self._cache_dir, 'file' + suffix)
-			with surrogate.open('w') as f:
-				# At least Gnome doesn't display a proper icon unless the file
-				# has some contents. So give it some:
-				f.write('fman')
-			self._cache[suffix] = self._get_qt_icon(surrogate)
-		return self._cache[suffix]
+		with self._cache_lock:
+			if suffix not in self._cache:
+				surrogate = Path(self._cache_dir, 'file' + suffix)
+				with surrogate.open('w') as f:
+					f.write('fman')
+				self._cache[suffix] = self._get_qt_icon(surrogate)
+			return self._cache[suffix]
 	def _get_qt_icon(self, path):
 		if not isinstance(path, str):
 			path = str(path)
@@ -105,7 +106,7 @@ class GnomeFileIconProvider(QFileIconProvider):
 		try:
 			return gio_file.query_info(*args)
 		except self.GLib.GError as e:
-			if e.message and e.message.endswith('No such file or directory'):
+			if str(e).endswith('No such file or directory'):
 				raise filenotfounderror(file_path)
 			else:
 				raise
