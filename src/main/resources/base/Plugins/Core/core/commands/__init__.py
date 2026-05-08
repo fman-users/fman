@@ -1427,6 +1427,8 @@ class InstallPlugin(ApplicationCommand):
 					description=repo.description
 				)
 	def _install_plugin(self, name, zipball_contents):
+		if os.sep in name or '/' in name or '..' in name:
+			raise ValueError('Invalid plugin name: %s' % name)
 		os.makedirs(_THIRDPARTY_PLUGINS_DIR, exist_ok=True)
 		dest_dir = os.path.join(_THIRDPARTY_PLUGINS_DIR, name)
 		dest_dir_url = as_url(dest_dir)
