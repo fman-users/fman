@@ -10,7 +10,10 @@ from urllib.parse import urlencode
 from urllib.request import urlopen, Request
 
 import json
+import logging
 import ssl
+
+_LOG = logging.getLogger(__name__)
 
 class MetricsError(Exception):
 	pass
@@ -69,14 +72,14 @@ class Metrics:
 		try:
 			self._backend.track(self._user, event, data)
 		except MetricsError:
-			pass
+			_LOG.debug('Failed to track event %s', event, exc_info=True)
 	def update_user(self, **properties):
 		if not self._enabled:
 			return
 		try:
 			self._backend.update_user(self._user, **properties)
 		except MetricsError:
-			pass
+			_LOG.debug('Failed to update user', exc_info=True)
 	def _read_json(self):
 		with open(self._json_path, 'r') as f:
 			return json.load(f)
@@ -148,6 +151,7 @@ class LoggingBackend:
 			f.write('\n\n'.join(map(fmt_log, self._logs)))
 
 class AsynchronousMetrics:
+	_SENTINEL = object()
 	def __init__(self, metrics):
 		self.past_events = []
 		self._metrics = metrics
@@ -164,7 +168,14 @@ class AsynchronousMetrics:
 		self._queue.put(lambda: self._metrics.track(event, properties))
 	def update_user(self, **properties):
 		self._queue.put(lambda: self._metrics.update_user(**properties))
+	def shutdown(self, timeout=2):
+		self._queue.put(self._SENTINEL)
+		self._thread.join(timeout)
 	def _work(self):
 		while True:
-			self._queue.get()()
+			task = self._queue.get()
+			if task is self._SENTINEL:
+				self._queue.task_done()
+				break
+			task()
 			self._queue.task_done()

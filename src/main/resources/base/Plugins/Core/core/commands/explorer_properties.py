@@ -96,9 +96,11 @@ def _show_file_properties(dir_, filenames):
 	if not cm:
 		return
 	hMenu = win32gui.CreatePopupMenu()
-	cm.QueryContextMenu(hMenu, 0, 1, 0x7FFF, CMF_EXPLORE)
-	cm.InvokeCommand((0, None, 'properties', '', '', 1, 0, None))
-	cm.QueryContextMenu(hMenu, 0, 1, 0x7FFF, CMF_EXPLORE)
+	try:
+		cm.QueryContextMenu(hMenu, 0, 1, 0x7FFF, CMF_EXPLORE)
+		cm.InvokeCommand((0, None, 'properties', '', '', 1, 0, None))
+	finally:
+		win32gui.DestroyMenu(hMenu)
 
 def _show_drive_properties(drive_nobackslash):
 	sei = SHELLEXECUTEINFO()

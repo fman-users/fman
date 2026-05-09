@@ -15,11 +15,11 @@ class QtKeyEvent:
 		modifiers = self.modifiers
 		if is_mac() and self.key in (Key_Down, Key_Up, Key_Left, Key_Right):
 			# According to the Qt documentation ([1]), the KeypadModifier flag
-			# is set when an arrow key is pressed on OS X because the arrow keys
+			# is set when an arrow key is pressed on macOS because the arrow keys
 			# are part of the keypad. We don't want our users to have to specify
 			# this modifier in their keyboard binding files. So we overwrite
 			# this behaviour of Qt.
-			# [1]: http://doc.qt.io/qt-5/qt.html#KeyboardModifier-enum
+			# [1]: https://doc.qt.io/archives/qt-5.15/qt.html#KeyboardModifier-enum
 			modifiers &= ~KeypadModifier
 		key, modifiers, keys = self._alias_return_and_enter(modifiers, keys)
 		return QKeySequence(modifiers | key).matches(QKeySequence(keys)) \

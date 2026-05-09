@@ -30,8 +30,8 @@ class SingleRowMode(
 			self.selectionModel().currentRowChanged.disconnect(
 				self._current_row_changed
 			)
-			assert self._single_row_delegate
-			self.remove_delegate(self._single_row_delegate)
+			if self._single_row_delegate:
+				self.remove_delegate(self._single_row_delegate)
 		super().setSelectionModel(selectionModel)
 		selectionModel.currentRowChanged.connect(self._current_row_changed)
 		self._single_row_delegate = SingleRowModeDelegate(self)

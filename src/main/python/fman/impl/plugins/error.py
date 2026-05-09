@@ -30,6 +30,7 @@ class PluginErrorHandler(ExceptionHandler):
 				if is_below_dir(frame.filename, plugin_dir):
 					return plugin_dir
 	def report(self, message, exc=None):
+		"""exc: Exception instance, None to auto-capture, or False to suppress."""
 		if exc is None:
 			exc = sys.exc_info()[1]
 		if exc:

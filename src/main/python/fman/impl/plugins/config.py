@@ -3,6 +3,9 @@ from os.path import dirname, splitext, join
 from threading import RLock
 
 import json
+import logging
+
+_LOG = logging.getLogger(__name__)
 
 class Config:
 	def __init__(self, platform):
@@ -54,16 +57,11 @@ class Config:
 			for json_name in self._save_on_quit:
 				try:
 					self.save_json(json_name)
-				except ValueError as error_computing_delta:
-					# This can happen for a variety of reasons. One example:
-					# When multiple instances of fman are open and another
-					# instance has already written to the same json file, then
-					# the delta computation may fail with a ValueError. Ignore
-					# this so we can at least save the other files in
-					# _save_on_quit:
+				except ValueError:
+					_LOG.debug('Delta computation failed for %s', json_name, exc_info=True)
 					continue
 				except OSError:
-					# Not much we can do. Try the other JSONs at least:
+					_LOG.warning('Failed to save %s on quit', json_name, exc_info=True)
 					continue
 	def _reload_cache(self):
 		old_cache = self._cache
@@ -94,7 +92,7 @@ def load_json(paths):
 		if result is None:
 			result = type(next_value)(next_value)
 			continue
-		if type(next_value) != type(result):
+		if not isinstance(next_value, type(result)):
 			raise ValueError(
 				'Cannot join types %s and %s.' %
 				(type(next_value).__name__, type(result).__name__)
@@ -131,7 +129,7 @@ def get_differential_json(obj, paths, final_path):
 	if old_obj is None:
 		return obj
 	else:
-		if type(obj) != type(old_obj):
+		if not isinstance(obj, type(old_obj)):
 			raise ValueError(
 				'Cannot overwrite value of type %s with different type %s.' %
 				(type(old_obj).__name__, type(obj).__name__)

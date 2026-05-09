@@ -6,6 +6,7 @@ from fman.url import splitscheme
 from fman_unittest.impl.model import StubFileSystem
 from PyQt5.QtCore import QObject, pyqtSignal
 from random import shuffle, random
+from threading import Thread
 from unittest import TestCase
 
 import random
@@ -160,6 +161,40 @@ def f(url, cells, is_loaded=False, is_dir=False):
 
 def c(str_, sort_value_asc=0, sort_value_desc=_NOT_LOADED):
 	return Cell(str_, sort_value_asc, sort_value_desc)
+
+class ModelFilesCopyTest(TestCase):
+	def test_files_copy_safe_under_concurrent_mutation(self):
+		"""dict.copy() must not raise RuntimeError when _files is mutated."""
+		app = StubApp()
+		executor_before = Executor._INSTANCE
+		Executor._INSTANCE = Executor(app)
+		try:
+			fs = StubFileSystem({})
+			model = Model(fs, 'null://', [Column()])
+			model._files = {('s://%d' % i): None for i in range(1000)}
+			errors = []
+			def copy_loop():
+				try:
+					for _ in range(200):
+						model._files.copy()
+				except RuntimeError as e:
+					errors.append(e)
+			def mutate_loop():
+				for i in range(1000, 1200):
+					model._files['s://%d' % i] = None
+				for i in range(1000, 1200):
+					model._files.pop('s://%d' % i, None)
+			t1 = Thread(target=copy_loop)
+			t2 = Thread(target=mutate_loop)
+			t1.start()
+			t2.start()
+			t1.join()
+			t2.join()
+			self.assertEqual([], errors)
+		finally:
+			app.aboutToQuit.emit()
+			Executor._INSTANCE = executor_before
+
 
 class StubApp(QObject):
 	aboutToQuit = pyqtSignal()

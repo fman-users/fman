@@ -13,7 +13,8 @@ class UsageHelper:
 	def _on_mouse_action(self, pane, events):
 		if not self._is_first_run:
 			return False
-		assert events, events
+		if not events:
+			return False
 		if events[-1] == 'AbortedTour' and 'AbortedTour' not in events[:-1]:
 			response = show_alert(
 				"Hey, sorry to bother again. You just used the mouse. That "

@@ -12,10 +12,10 @@ class CursorMovement(QTableView):
 		self._move_cursor(self.MoveUp)
 	def move_cursor_page_up(self, toggle_selection=False):
 		self._move_cursor(self.MovePageUp, toggle_selection)
-		self.move_cursor_up()
+		self.move_cursor_up(toggle_selection)
 	def move_cursor_page_down(self, toggle_selection=False):
 		self._move_cursor(self.MovePageDown, toggle_selection)
-		self.move_cursor_down()
+		self.move_cursor_down(toggle_selection)
 	def move_cursor_home(self, toggle_selection=False):
 		self._move_cursor(self.MoveHome, toggle_selection)
 	def move_cursor_end(self, toggle_selection=False):
