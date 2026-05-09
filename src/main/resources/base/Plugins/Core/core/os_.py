@@ -85,8 +85,11 @@ def _is_ubuntu():
 	except FileNotFoundError:
 		return False
 
+_ALLOWED_POPEN_KEYS = {'args', 'cwd', 'env', 'startupinfo'}
+
 def _run_app_from_setting(app, curr_dir):
 	popen_kwargs = strformat_dict_values(app, {'curr_dir': curr_dir})
+	popen_kwargs = {k: v for k, v in popen_kwargs.items() if k in _ALLOWED_POPEN_KEYS}
 	Popen(**popen_kwargs)
 
 def _is_gnome_based():
@@ -100,6 +103,7 @@ def _get_os_release_name():
 			if line.startswith('NAME='):
 				name = line[len('NAME='):]
 				return name.strip('"')
+	return ''
 
 _FOCUS_PREVENTION_LEVEL = \
 	'/org/compiz/profiles/unity/plugins/core/focus-prevention-level'

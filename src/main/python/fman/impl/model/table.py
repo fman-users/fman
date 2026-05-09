@@ -151,7 +151,7 @@ class Rows:
 		new_keys = {row.key: first_rownum + i for i, row in enumerate(rows)}
 		with self._lock:
 			# Perform this check here, once we have the lock:
-			if first_rownum < 0 or first_rownum > len(self._rows) + 1:
+			if first_rownum < 0 or first_rownum > len(self._rows):
 				raise ValueError('Invalid first_rownum: %d' % first_rownum)
 			num_rows = len(rows)
 			for row in self._rows[first_rownum:]:

@@ -153,9 +153,11 @@ class PaneCommandRegistry(CommandRegistry):
 		if file_under_cursor is not self._DEFAULT:
 			cm = pane._override_file_under_cursor(file_under_cursor)
 			cm.__enter__()
-		yield
-		if file_under_cursor is not self._DEFAULT:
-			cm.__exit__(None, None, None)
+		try:
+			yield
+		finally:
+			if file_under_cursor is not self._DEFAULT:
+				cm.__exit__(None, None, None)
 
 def _get_default_aliases(cmd_class):
 	return re.sub(r'([a-z])([A-Z])', r'\1 \2', cmd_class.__name__)\
