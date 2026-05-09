@@ -1,1 +1,3 @@
+# pgi intentionally excluded — Gnome icon integration unavailable on Arch.
+# Qt's default QFileIconProvider is used instead.
 -r linux.txt

@@ -7,13 +7,9 @@ from glob import glob
 from os import remove
 from os.path import basename, join
 from shutil import rmtree, move
-from subprocess import run, PIPE, CalledProcessError, SubprocessError
-from time import sleep
+from subprocess import run, PIPE
 
-import json
 import os
-import plistlib
-import requests
 
 _UPDATES_DIR = 'updates/mac'
 
@@ -114,44 +110,25 @@ def _run_codesign(*args):
 def _staple(file_path):
 	run(['xcrun', 'stapler', 'staple', file_path], check=True)
 
-def _notarize(file_path, query_interval_secs=10):
-	response = _run_altool([
-		'--notarize-app', '-t', 'osx', '-f', file_path,
-		'--primary-bundle-id', SETTINGS['mac_bundle_identifier']
-	])
-	request_uuid = response['notarization-upload']['RequestUUID']
-	while True:
-		sleep(query_interval_secs)
-		try:
-			response = _run_altool(['--notarization-info', request_uuid])
-		except CalledProcessError as e:
-			stdout = e.stdout.decode('utf-8')
-			if 'Could not find the RequestUUID' not in stdout:
-				raise
-		else:
-			status = response['notarization-info']['Status']
-			if status != 'in progress':
-				break
-		print('Waiting for notarization to complete...')
-	log_url = response['notarization-info']['LogFileURL']
-	log_response = requests.get(log_url)
-	log_response.raise_for_status()
-	log_json = log_response.json()
-	issues = log_json.get('issues', [])
-	if issues:
-		print('Notarization encountered some issues:')
-		print(json.dumps(issues, indent=4, sort_keys=True))
-	if status != 'success':
-		raise RuntimeError('Unexpected notarization status: %r' % status)
-
-def _run_altool(args):
-	all_args = [
-		'xcrun', 'altool', '--output-format', 'xml',
-		'-u', SETTINGS['apple_developer_user'],
-		'-p', SETTINGS['apple_developer_app_pw']
-	] + args
-	process = run(all_args, stdout=PIPE, stderr=PIPE, check=True)
-	return plistlib.loads(process.stdout)
+def _notarize(file_path):
+	result = run(
+		[
+			'xcrun', 'notarytool', 'submit', file_path, '--wait',
+			'--apple-id', SETTINGS['apple_developer_user'],
+			'--password', SETTINGS['apple_developer_app_pw'],
+			'--team-id', SETTINGS['apple_developer_team_id']
+		],
+		stdout=PIPE, stderr=PIPE, check=False
+	)
+	output = result.stdout.decode('utf-8')
+	print(output)
+	if result.returncode != 0:
+		stderr = result.stderr.decode('utf-8')
+		raise RuntimeError(
+			'Notarization failed (exit %d):\n%s' % (result.returncode, stderr)
+		)
+	if 'status: Accepted' not in output:
+		raise RuntimeError('Unexpected notarization status:\n%s' % output)
 
 @command
 def sign_installer():

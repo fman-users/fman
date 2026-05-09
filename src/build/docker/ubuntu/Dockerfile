@@ -16,7 +16,7 @@ RUN apt-get install libgl1-mesa-glx -y
 
 # fpm:
 RUN apt-get install ruby ruby-dev build-essential -y && \
-    gem install --no-ri --no-rdoc fpm
+    gem install --no-document fpm
 
 WORKDIR /root/${app_name}
 
@@ -25,9 +25,9 @@ RUN apt-get install gobject-introspection libgtk-3-0 -y
 
 # Set up virtual environment:
 ADD *.txt /tmp/requirements/
-RUN python3.9 -m venv venv && \
-    venv/bin/python -m pip install -U pip && \
-    venv/bin/python -m pip install -r "/tmp/requirements/${requirements}"
+RUN python3.9 -m venv .venv && \
+    .venv/bin/python -m pip install -U pip && \
+    .venv/bin/python -m pip install -r "/tmp/requirements/${requirements}"
 RUN rm -rf /tmp/requirements/
 
 ADD .bashrc /root/.bashrc

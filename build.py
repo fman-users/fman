@@ -10,7 +10,6 @@ from fbs.builtin_commands import clean
 from fbs.cmdline import command
 from fbs_runtime.platform import is_windows, is_mac, is_linux, is_ubuntu, \
 	is_fedora, is_arch_linux, linux_distribution
-from os.path import dirname
 
 import fbs.cmdline
 import re
@@ -49,7 +48,7 @@ def publish():
 		sign_installer()
 		upload()
 	elif is_linux():
-		if is_ubuntu():
+		if is_ubuntu() or linux_distribution() == 'Debian GNU/Linux':
 			freeze()
 			installer()
 			upload()
@@ -112,18 +111,18 @@ def release():
 							'    python build.py post_release\n'
 							% release_tag
 						)
-					except:
+					except Exception:
 						git('push', '--delete', 'origin', release_tag)
 						raise
-				except:
+				except Exception:
 					git('revert', '--no-edit', revision_before + '..HEAD' )
 					git('push', '-u', 'origin', 'main')
 					revision_before = git('rev-parse', 'HEAD').rstrip()
 					raise
-			except:
+			except Exception:
 				git('tag', '-d', release_tag)
 				raise
-		except:
+		except Exception:
 			git('reset', revision_before)
 			_replace_in_json(settings_path, 'version', version)
 			raise
@@ -136,7 +135,8 @@ snapshot_suffix = '-SNAPSHOT'
 def post_release():
 	activate_profile('release')
 	version = SETTINGS['version']
-	assert not version.endswith(snapshot_suffix)
+	if version.endswith(snapshot_suffix):
+		raise ValueError('Cannot post_release a SNAPSHOT version: %s' % version)
 	cloudfront_items_to_invalidate = []
 	for item in ('fman.dmg', 'fman.deb', 'fman.pkg.tar.xz', 'fman.rpm'):
 		cloudfront_items_to_invalidate.append(item)

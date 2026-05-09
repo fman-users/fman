@@ -44,7 +44,7 @@ def create_cloudfront_invalidation(items):
 				'Quantity': len(items),
 				'Items': ['/' + item for item in items]
 			},
-			'CallerReference': str(int(time()))
+			'CallerReference': '%s-%s' % (int(time()), id(items))
 		}
 	)
 
