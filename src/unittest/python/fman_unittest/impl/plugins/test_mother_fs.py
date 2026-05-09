@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fman.fs import FileSystem, cached
 from fman.impl.plugins.mother_fs import MotherFileSystem, CachedIterator
 from fman_unittest.impl.model import StubFileSystem
-from threading import Thread, Lock, Event
+from threading import Thread, Barrier, Lock, Event
 from time import sleep
 from unittest import TestCase
 
@@ -141,6 +141,51 @@ class MotherFileSystemTest(TestCase):
 		self.assertTrue(mother_fs.is_dir('stub://dir'))
 		mother_fs.move('stub://a/b', 'stub://a/../b')
 		self.assertTrue(mother_fs.exists('stub://b'))
+	def test_file_added_clears_parent_stat(self):
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': []}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		mother_fs.is_dir('stub://a')
+		self.assertIsNotNone(fs.cache.get('a', 'is_dir'))
+		mother_fs.touch('stub://a/b')
+		with self.assertRaises(KeyError):
+			fs.cache.get('a', 'stat')
+	def test_file_removed_clears_parent_stat(self):
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': ['b']},
+			'a/b': {}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		mother_fs.is_dir('stub://a')
+		mother_fs.delete('stub://a/b')
+		with self.assertRaises(KeyError):
+			fs.cache.get('a', 'stat')
+	def test_iterdir_returns_cached_iterator(self):
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': ['b', 'c']}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		result = mother_fs.iterdir('stub://a')
+		self.assertIsInstance(result, CachedIterator)
+	def test_iterdir_cached_is_same_instance(self):
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': ['b']}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		first = mother_fs.iterdir('stub://a')
+		second = mother_fs.iterdir('stub://a')
+		self.assertIs(first, second)
+	def test_iterdir_list_source_becomes_cached_iterator(self):
+		"""Even when underlying FS returns plain list, iterdir wraps it."""
+		fs = StubFileSystem({
+			'a': {'is_dir': True, 'files': ['x', 'y']}
+		})
+		mother_fs = self._create_mother_fs(fs)
+		result = mother_fs.iterdir('stub://a')
+		self.assertIsInstance(result, CachedIterator)
+		self.assertEqual(Counter(['x', 'y']), Counter(list(result)))
+		self.assertEqual(Counter(['x', 'y']), Counter(list(result)))
 	def _create_mother_fs(self, fs):
 		result = MotherFileSystem(None)
 		result.add_child(fs.scheme, fs)
@@ -264,6 +309,138 @@ class CachedIteratorTest(TestCase):
 		iterable.remove(1)
 		with self.assertRaises(StopIteration):
 			next(iterator)
+	def test_remove_then_append_same_item(self):
+		iterable = CachedIterator(self._generate(1, 2))
+		iterator = iter(iterable)
+		self.assertEqual(1, next(iterator))
+		iterable.remove(2)
+		iterable.append(2)
+		self.assertEqual(2, next(iterator))
+		with self.assertRaises(StopIteration):
+			next(iterator)
+		self.assertEqual([1, 2], list(iterable))
+	def test_remove_before_yield_then_append(self):
+		iterable = CachedIterator(self._generate(1, 2, 3))
+		iterable.remove(3)
+		iterable.append(3)
+		result = list(iterable)
+		self.assertIn(3, result)
+		self.assertEqual(Counter([1, 2, 3]), Counter(result))
+	def test_pre_remove_unknown_item_then_source_yields_it(self):
+		iterable = CachedIterator(self._generate(1, 2))
+		iterable.remove(2)
+		result = list(iterable)
+		self.assertEqual([1], result)
+	def test_concurrent_remove_append(self):
+		iterable = CachedIterator(self._generate(*range(100)))
+		results_before = []
+		results_after = []
+		barrier = Event()
+		def reader():
+			barrier.wait()
+			results_after.extend(list(iterable))
+		for i in range(50, 100):
+			iterable.remove(i)
+		for i in range(50, 100):
+			iterable.append(i)
+		results_before = list(iterable)
+		self.assertEqual(Counter(range(100)), Counter(results_before))
+	def test_get_next_pointer_after_all_removed(self):
+		"""get_next must advance pointer past cached items when all are dead."""
+		iterable = CachedIterator(self._generate(1, 2, 3, 4))
+		iterator = iter(iterable)
+		self.assertEqual(1, next(iterator))
+		self.assertEqual(2, next(iterator))
+		iterable.remove(3)
+		iterable.remove(4)
+		iterable.append(5)
+		result = list(iterator)
+		self.assertIn(5, result)
+		self.assertNotIn(3, result)
+		self.assertNotIn(4, result)
+	def test_concurrent_iterate_and_mutate(self):
+		"""Multiple readers + one mutator must not crash or produce dupes."""
+		items = list(range(50))
+		iterable = CachedIterator(self._generate(*items))
+		errors = []
+		results = [None, None]
+		barrier = Barrier(3)
+		def reader(idx):
+			barrier.wait()
+			try:
+				results[idx] = list(iterable)
+			except Exception as e:
+				errors.append(e)
+		def mutator():
+			barrier.wait()
+			for i in range(50, 80):
+				iterable.append(i)
+			for i in range(10):
+				iterable.remove(i)
+		threads = [
+			Thread(target=reader, args=(0,)),
+			Thread(target=reader, args=(1,)),
+			Thread(target=mutator)
+		]
+		for t in threads:
+			t.start()
+		for t in threads:
+			t.join()
+		self.assertEqual([], errors)
+		for result in results:
+			if result is not None:
+				self.assertEqual(len(result), len(set(result)),
+					'Duplicates found: %r' % result)
+	def test_concurrent_remove_append_stress(self):
+		"""Hammer remove+append from many threads, no crash or lost items."""
+		iterable = CachedIterator(self._generate(*range(200)))
+		list(iterable)
+		errors = []
+		barrier = Barrier(4)
+		def remove_thread(start, end):
+			barrier.wait()
+			for i in range(start, end):
+				try:
+					iterable.remove(i)
+				except Exception as e:
+					errors.append(e)
+		def append_thread(start, end):
+			barrier.wait()
+			for i in range(start, end):
+				try:
+					iterable.append(i)
+				except Exception as e:
+					errors.append(e)
+		threads = [
+			Thread(target=remove_thread, args=(0, 100)),
+			Thread(target=remove_thread, args=(100, 200)),
+			Thread(target=append_thread, args=(0, 100)),
+			Thread(target=append_thread, args=(100, 200))
+		]
+		for t in threads:
+			t.start()
+		for t in threads:
+			t.join()
+		self.assertEqual([], errors)
+		result = list(iterable)
+		self.assertEqual(len(result), len(set(result)))
+	def test_concurrent_iteration_with_slow_source(self):
+		"""Two iterators consuming a slow source must not lose items."""
+		items = list(range(20))
+		iterable = CachedIterator(self._generate_slowly(*items))
+		results = [None, None]
+		barrier = Barrier(2)
+		def reader(idx):
+			barrier.wait()
+			results[idx] = list(iterable)
+		t1 = Thread(target=reader, args=(0,))
+		t2 = Thread(target=reader, args=(1,))
+		t1.start()
+		t2.start()
+		t1.join()
+		t2.join()
+		for result in results:
+			self.assertEqual(sorted(items), sorted(result))
 	def _generate(self, *args):
 		yield from args
 	def _generate_slowly(self, *args):

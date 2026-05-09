@@ -2,6 +2,7 @@ from getpass import getuser
 from os import listdir, strerror
 from os.path import join, basename, expanduser, dirname, realpath, relpath, \
 	pardir, splitdrive
+from threading import Lock
 
 import errno
 import os
@@ -63,12 +64,17 @@ class ConstructorMixin(MixinBase):
 class Event:
 	def __init__(self):
 		self._callbacks = []
+		self._lock = Lock()
 	def add_callback(self, callback):
-		self._callbacks.append(callback)
+		with self._lock:
+			self._callbacks.append(callback)
 	def remove_callback(self, callback):
-		self._callbacks.remove(callback)
+		with self._lock:
+			self._callbacks.remove(callback)
 	def trigger(self, *args):
-		for callback in self._callbacks:
+		with self._lock:
+			callbacks = list(self._callbacks)
+		for callback in callbacks:
 			callback(*args)
 
 # Copied from core.util:
