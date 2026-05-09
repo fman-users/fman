@@ -50,12 +50,12 @@ class Controller:
 		pane = self._panes[pane_widget]
 		key_event = QtKeyEvent(qkeyevent.key(), qkeyevent.modifiers())
 		return self._nonexistent_shortcut_handler(key_event, pane)
-	def on_doubleclicked(self, pane_widget, file_path):
+	def on_doubleclicked(self, pane_widget, file_url):
 		past_events = self._metrics.past_events[::]
 		self._metrics.track('DoubleclickedFile')
 		pane = self._panes[pane_widget]
 		if not self._usage_helper.on_doubleclicked(pane, past_events):
-			pane._broadcast('on_doubleclicked', file_path)
+			pane._broadcast('on_doubleclicked', file_url)
 	def on_file_renamed(self, pane_widget, *args):
 		self._metrics.track('RenamedFile')
 		self._panes[pane_widget]._broadcast('on_name_edited', *args)
@@ -68,7 +68,6 @@ class Controller:
 		elif event.reason() == QContextMenuEvent.Keyboard:
 			via = 'Keyboard'
 		else:
-			assert event.reason() == QContextMenuEvent.Other, event.reason()
 			via = 'Other'
 		past_events = self._metrics.past_events[::]
 		self._metrics.track('OpenedContextMenu', {'via': via})

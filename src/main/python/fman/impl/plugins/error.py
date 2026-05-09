@@ -30,6 +30,7 @@ class PluginErrorHandler(ExceptionHandler):
 				if is_below_dir(frame.filename, plugin_dir):
 					return plugin_dir
 	def report(self, message, exc=None):
+		"""exc: Exception instance, None to auto-capture, or False to suppress."""
 		if exc is None:
 			exc = sys.exc_info()[1]
 		if exc:
@@ -46,8 +47,8 @@ class PluginErrorHandler(ExceptionHandler):
 		self._app.exit(code)
 	def on_main_window_shown(self, main_window):
 		self._main_window = main_window
-		if self._pending_error_messages:
-			self._main_window.show_alert(self._pending_error_messages[0])
+		for message in self._pending_error_messages:
+			self._main_window.show_alert(message)
 	def _get_plugin_traceback(self, exc):
 		if isinstance(exc, ThemeError):
 			return exc.description

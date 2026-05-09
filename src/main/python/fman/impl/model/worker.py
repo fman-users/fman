@@ -21,16 +21,18 @@ class Worker:
 		with self._shutdown_lock:
 			if self._shutdown:
 				return
-			self._queue.put(WorkItem(priority, fn, *args, *kwargs))
+			self._queue.put(WorkItem(priority, fn, *args, **kwargs))
 	def shutdown(self):
 		with self._shutdown_lock:
 			self._shutdown = True
 			self._queue.put(WorkItem(0, lambda: None))
-		self._thread.join()
+		if self._thread.is_alive():
+			self._thread.join()
 	def _run(self):
 		while True:
 			task = self._queue.get()
 			if task.is_shutdown():
+				self._queue.task_done()
 				break
 			task.run()
 			self._queue.task_done()
@@ -56,7 +58,7 @@ class WorkItem:
 			return NotImplemented
 	def __eq__(self, other):
 		try:
-			return self._fn, self._args, self._kwargs, self._priority == \
-				   other._fn, other._args, other._kwargs, other._priority
+			return (self._fn, self._args, self._kwargs, self._priority) == \
+				   (other._fn, other._args, other._kwargs, other._priority)
 		except AttributeError:
 			return NotImplemented

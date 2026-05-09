@@ -30,7 +30,7 @@ class Name(Column):
 			match = re.search(r'\d+', str_)
 			if match:
 				minor += str_[:match.start()]
-				minor += '%06d' % int(match.group(0))
+				minor += '%020d' % int(match.group(0))
 				str_ = str_[match.end():]
 			else:
 				minor += str_

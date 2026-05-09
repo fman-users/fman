@@ -87,9 +87,10 @@ class TableModel:
 		self.endInsertRows()
 	def move_rows(self, cut_start, cut_end, insert_start):
 		dst_row = _get_move_destination(cut_start, cut_end, insert_start)
-		assert self.beginMoveRows(
+		if not self.beginMoveRows(
 			QModelIndex(), cut_start, cut_end - 1, QModelIndex(), dst_row
-		)
+		):
+			raise RuntimeError('beginMoveRows failed')
 		self._rows.move(cut_start, cut_end, insert_start)
 		self.endMoveRows()
 	def update_rows(self, rows, first_rownum):
@@ -129,9 +130,11 @@ class Rows:
 		self._keys = {}
 		self._lock = RLock()
 	def __len__(self):
-		return len(self._rows)
+		with self._lock:
+			return len(self._rows)
 	def __getitem__(self, item):
-		return self._rows[item]
+		with self._lock:
+			return self._rows[item]
 	def __setitem__(self, i, row):
 		with self._lock:
 			old_row = self._rows[i]
@@ -140,7 +143,8 @@ class Rows:
 			self._keys[row.key] = i
 			self._check_integrity()
 	def __iter__(self):
-		return iter(self._rows)
+		with self._lock:
+			return iter(list(self._rows))
 	def reset_to(self, new_rows):
 		new_keys = {row.key: i for i, row in enumerate(new_rows)}
 		with self._lock:
@@ -151,7 +155,7 @@ class Rows:
 		new_keys = {row.key: first_rownum + i for i, row in enumerate(rows)}
 		with self._lock:
 			# Perform this check here, once we have the lock:
-			if first_rownum < 0 or first_rownum > len(self._rows) + 1:
+			if first_rownum < 0 or first_rownum > len(self._rows):
 				raise ValueError('Invalid first_rownum: %d' % first_rownum)
 			num_rows = len(rows)
 			for row in self._rows[first_rownum:]:
@@ -183,7 +187,8 @@ class Rows:
 			del self._rows[start:end]
 			self._check_integrity()
 	def find(self, key):
-		return self._keys[key]
+		with self._lock:
+			return self._keys[key]
 	def _cut(self, cut_start, cut_end):
 		with self._lock:
 			num_rows = len(self._rows)
@@ -200,8 +205,8 @@ class Rows:
 			self._rows = self._rows[:cut_start] + self._rows[cut_end:]
 			return result
 	def _check_integrity(self):
-		assert len(self._rows) == len(self._keys), \
-			'Integrity error, likely caused by duplicate rows'
+		if len(self._rows) != len(self._keys):
+			raise RuntimeError('Integrity error, likely caused by duplicate rows')
 
 class Row:
 	def __init__(self, key, icon, drop_enabled, cells):

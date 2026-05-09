@@ -34,5 +34,11 @@ def normalize(path_):
 	if path_ == '.':
 		path_ = ''
 	# Resolve a/../b
-	path_ = re.subn(r'(^|/)([^/]+)/\.\.(?:$|/)', r'\1', path_)[0]
+	while True:
+		path_, count = re.subn(r'(^|/)((?!\.\.(?:/|$))[^/]+)/\.\.(?:$|/)', r'\1', path_)
+		if not count:
+			break
+	# Resolve /.. at root
+	while path_.startswith('/..'):
+		path_ = path_[3:] or '/'
 	return path_.rstrip('/')
