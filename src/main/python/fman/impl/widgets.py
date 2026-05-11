@@ -7,13 +7,16 @@ from fman.impl.util.qt import disable_window_animations_mac, Key_Escape, \
 from fman.impl.util.qt.thread import run_in_main_thread
 from fman.impl.view.location_bar import LocationBar
 from fman.impl.view import FileListView, Layout, set_selection
+from fman.impl.view.gallery import GalleryView, GalleryItemDelegate, \
+	DEFAULT_TILE_SIZE_PX
+from fman.impl.view.thumbnails import ThumbnailCache
 from fman.url import as_human_readable, basename
 from PyQt5.QtCore import pyqtSignal, QTimer, Qt, QEvent, QSize
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QWidget, QMainWindow, QSplitter, QStatusBar, \
 	QMessageBox, QInputDialog, QLineEdit, QFileDialog, QLabel, QDialog, \
 	QHBoxLayout, QPushButton, QVBoxLayout, QSplitterHandle, QApplication, \
-	QFrame, QAction, QSizePolicy, QProgressDialog, QProgressBar
+	QFrame, QAction, QSizePolicy, QProgressDialog, QProgressBar, QStackedWidget
 from random import randint, randrange
 
 import re
@@ -58,7 +61,29 @@ class DirectoryPaneWidget(QWidget):
 		self._file_view.setModel(self._model)
 		self._file_view.doubleClicked.connect(self._on_doubleclicked)
 		self._file_view.key_press_event_filter = self._on_key_pressed
-		self.setLayout(Layout(self._location_bar, self._file_view))
+
+		# Gallery view shares the same model and selection model.
+		self._thumbnail_cache = ThumbnailCache(
+			_gallery_cache_dir(), parent=self
+		)
+		self._gallery_view = GalleryView(self)
+		self._gallery_view.setModel(self._model)
+		self._gallery_view.setSelectionModel(self._file_view.selectionModel())
+		self._gallery_view.setItemDelegate(GalleryItemDelegate(
+			get_model_url=self._model.url,
+			get_thumbnail_cache=lambda: self._thumbnail_cache,
+			parent=self._gallery_view,
+		))
+		self._gallery_view.doubleClicked.connect(self._on_doubleclicked)
+		self._thumbnail_cache.thumbnail_ready.connect(
+			lambda _path: self._gallery_view.viewport().update()
+		)
+
+		self._view_stack = QStackedWidget(self)
+		self._view_stack.addWidget(self._file_view)     # index 0 = 'list'
+		self._view_stack.addWidget(self._gallery_view)  # index 1 = 'gallery'
+
+		self.setLayout(Layout(self._location_bar, self._view_stack))
 		self._location_bar.setFocusProxy(self._file_view)
 		self.setFocusProxy(self._file_view)
 		self._controller = controller
@@ -166,6 +191,29 @@ class DirectoryPaneWidget(QWidget):
 			)
 		for i, width in enumerate(column_widths):
 			self._file_view.setColumnWidth(i, width)
+	@run_in_main_thread
+	def set_view_mode(self, mode):
+		"""Switch between 'list' and 'gallery'."""
+		if mode == 'list':
+			self._view_stack.setCurrentWidget(self._file_view)
+			self.setFocusProxy(self._file_view)
+		elif mode == 'gallery':
+			self._view_stack.setCurrentWidget(self._gallery_view)
+			self.setFocusProxy(self._gallery_view)
+		else:
+			raise ValueError('Unknown view mode: %r' % mode)
+		self.focus()
+	@run_in_main_thread
+	def get_view_mode(self):
+		if self._view_stack.currentWidget() is self._gallery_view:
+			return 'gallery'
+		return 'list'
+	@run_in_main_thread
+	def set_gallery_tile_size(self, px):
+		self._gallery_view.set_tile_size(px)
+	@run_in_main_thread
+	def get_gallery_tile_size(self):
+		return self._gallery_view.get_tile_size()
 	def _on_doubleclicked(self, index):
 		self._controller.on_doubleclicked(self, self._model.url(index))
 	def _on_key_pressed(self, event):
@@ -785,3 +833,19 @@ class ProgressDialog(QProgressDialog):
 			# pass a larger number, it would overflow to a negative value.
 			progress = self._MAX_C_INT * progress // self._size
 		self.setValue(progress)
+
+
+def _gallery_cache_dir():
+	from os.path import join
+	from fbs_runtime import platform
+	if platform.is_windows():
+		from os import environ
+		base = environ.get('LOCALAPPDATA') or environ.get('APPDATA') or '.'
+	elif platform.is_mac():
+		from os.path import expanduser
+		base = expanduser('~/Library/Caches')
+	else:
+		from os import environ
+		from os.path import expanduser
+		base = environ.get('XDG_CACHE_HOME') or expanduser('~/.cache')
+	return join(base, 'fman', 'thumbnails')
