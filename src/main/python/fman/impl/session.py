@@ -177,12 +177,11 @@ class SessionManager:
 		except OSError:
 			pass
 	def _read_pane_settings(self, pane):
-		widget = pane._widget
 		return {
 			'location': pane.get_location(),
 			'col_widths': pane.get_column_widths(),
-			'view_mode': widget.get_view_mode(),
-			'gallery_tile_size': widget.get_gallery_tile_size(),
+			'view_mode': pane.get_view_mode(),
+			'gallery_tile_size': pane.get_gallery_tile_size(),
 		}
 
 def _encode(bytes_):
