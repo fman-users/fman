@@ -105,6 +105,8 @@ class SessionManager:
 				path = expanduser('~')
 		url = path if '://' in path else as_url(path)
 		col_widths = pane_info.get('col_widths')
+		view_mode = pane_info.get('view_mode')
+		gallery_tile_size = pane_info.get('gallery_tile_size')
 		callback = None
 		home_dir = as_url(expanduser('~'))
 		try:
@@ -147,6 +149,16 @@ class SessionManager:
 				# This for instance happens when the old and new numbers of
 				# columns don't match (eg. 2 columns before, 3 now).
 				pass
+		if gallery_tile_size:
+			try:
+				pane._widget.set_gallery_tile_size(int(gallery_tile_size))
+			except (ValueError, TypeError):
+				pass
+		if view_mode in ('list', 'gallery'):
+			try:
+				pane._widget.set_view_mode(view_mode)
+			except (ValueError, AttributeError):
+				pass
 	def _exists_and_is_dir(self, url):
 		try:
 			return self._fs.is_dir(url)
@@ -165,9 +177,12 @@ class SessionManager:
 		except OSError:
 			pass
 	def _read_pane_settings(self, pane):
+		widget = pane._widget
 		return {
 			'location': pane.get_location(),
-			'col_widths': pane.get_column_widths()
+			'col_widths': pane.get_column_widths(),
+			'view_mode': widget.get_view_mode(),
+			'gallery_tile_size': widget.get_gallery_tile_size(),
 		}
 
 def _encode(bytes_):
