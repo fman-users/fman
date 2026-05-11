@@ -50,7 +50,7 @@ def pick_overlay_layout(tile_width_px):
 	return STACKED
 
 
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtCore import QSize, Qt, pyqtSignal
 from PyQt5.QtWidgets import QListView
 
 
@@ -70,6 +70,8 @@ class GalleryView(QListView):
 
 	Shares the model and selection-model with the pane's `FileListView`.
 	"""
+
+	tile_size_changed = pyqtSignal(int)   # new tile size in px
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
@@ -93,6 +95,7 @@ class GalleryView(QListView):
 			return
 		self._tile_size = px
 		self._apply_tile_size()
+		self.tile_size_changed.emit(px)
 
 	def get_tile_size(self):
 		return self._tile_size
@@ -104,3 +107,22 @@ class GalleryView(QListView):
 			icon_px + _TILE_PADDING_PX,
 			icon_px + _LABEL_AREA_PX
 		))
+
+	def keyPressEvent(self, event):
+		mod = event.modifiers()
+		ctrl_or_cmd = bool(mod & Qt.ControlModifier) or bool(mod & Qt.MetaModifier)
+		if ctrl_or_cmd:
+			key = event.key()
+			if key in (Qt.Key_Plus, Qt.Key_Equal):
+				self.set_tile_size(self._tile_size + TILE_SIZE_STEP_PX)
+				event.accept()
+				return
+			if key == Qt.Key_Minus:
+				self.set_tile_size(self._tile_size - TILE_SIZE_STEP_PX)
+				event.accept()
+				return
+			if key == Qt.Key_0:
+				self.set_tile_size(DEFAULT_TILE_SIZE_PX)
+				event.accept()
+				return
+		super().keyPressEvent(event)
