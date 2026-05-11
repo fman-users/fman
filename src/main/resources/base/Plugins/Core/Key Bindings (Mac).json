@@ -10,6 +10,7 @@
 	{ "keys": ["Space"], "command": "move_cursor_down", "args": {"toggle_selection": true} },
 	{ "keys": ["Cmd+Backspace"], "command": "move_to_trash" },
 	{ "keys": ["Cmd+."], "command": "toggle_hidden_files" },
+	{ "keys": ["Cmd+G"], "command": "toggle_gallery_view" },
 	{ "keys": ["Cmd+P"], "command": "go_to" },
 	{ "keys": ["Cmd+Shift+P"], "command": "command_palette" },
 	{ "keys": ["Cmd+Left"], "command": "go_back" },
