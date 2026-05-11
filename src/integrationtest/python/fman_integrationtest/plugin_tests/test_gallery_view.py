@@ -17,13 +17,9 @@ size clamping from ``fman.impl.view.gallery``.
 """
 
 from fman_integrationtest.plugin_tests import PluginTest
-
-
-# Pulled in from fman.impl.view.gallery to avoid importing PyQt5 at test
-# import time (the stub widget never instantiates a real Qt view):
-DEFAULT_TILE_SIZE_PX = 160
-MIN_TILE_SIZE_PX = 80
-MAX_TILE_SIZE_PX = 400
+from fman.impl.view.gallery import (
+	DEFAULT_TILE_SIZE_PX, MIN_TILE_SIZE_PX, MAX_TILE_SIZE_PX,
+)
 
 
 class _GalleryWidgetMixin:
@@ -100,16 +96,16 @@ class GalleryViewTest(PluginTest):
 
 	def test_default_gallery_tile_size(self):
 		self.assertEqual(
-			160, self._left_pane._widget.get_gallery_tile_size()
+			DEFAULT_TILE_SIZE_PX, self._left_pane._widget.get_gallery_tile_size()
 		)
 		self.assertEqual(
-			160, self._right_pane._widget.get_gallery_tile_size()
+			DEFAULT_TILE_SIZE_PX, self._right_pane._widget.get_gallery_tile_size()
 		)
 
 	def test_set_gallery_tile_size_clamps_to_max(self):
 		self._left_pane._widget.set_gallery_tile_size(99_999)
-		self.assertEqual(400, self._left_pane._widget.get_gallery_tile_size())
+		self.assertEqual(MAX_TILE_SIZE_PX, self._left_pane._widget.get_gallery_tile_size())
 
 	def test_set_gallery_tile_size_clamps_to_min(self):
 		self._left_pane._widget.set_gallery_tile_size(1)
-		self.assertEqual(80, self._left_pane._widget.get_gallery_tile_size())
+		self.assertEqual(MIN_TILE_SIZE_PX, self._left_pane._widget.get_gallery_tile_size())
