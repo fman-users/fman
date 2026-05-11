@@ -80,6 +80,16 @@ class MoveCursorPageDown(DirectoryPaneCommand):
 	def __call__(self, toggle_selection=False):
 		self.pane.move_cursor_page_down(toggle_selection)
 
+class ToggleGalleryView(DirectoryPaneCommand):
+
+	aliases = ('Toggle Gallery View',)
+
+	def __call__(self):
+		widget = self.pane._widget
+		current = widget.get_view_mode()
+		new_mode = 'gallery' if current == 'list' else 'list'
+		widget.set_view_mode(new_mode)
+
 class ToggleSelection(DirectoryPaneCommand):
 	def __call__(self):
 		file_under_cursor = self.pane.get_file_under_cursor()
