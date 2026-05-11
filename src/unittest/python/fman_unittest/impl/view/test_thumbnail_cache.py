@@ -72,3 +72,36 @@ class PickSizeBucketTest(TestCase):
 	def test_above_max_uses_max(self):
 		self.assertEqual(512, pick_size_bucket(513))
 		self.assertEqual(512, pick_size_bucket(2048))
+
+
+import os
+import tempfile
+from fman.impl.view.thumbnails import ThumbnailCache
+
+
+class ThumbnailCacheDiskTest(TestCase):
+
+	def setUp(self):
+		self._tmp = tempfile.TemporaryDirectory()
+		self.cache_dir = self._tmp.name
+
+	def tearDown(self):
+		self._tmp.cleanup()
+
+	def test_get_returns_none_for_missing(self):
+		cache = ThumbnailCache(self.cache_dir)
+		self.assertIsNone(cache.get('/no/such/file.png', 128))
+
+	def test_disk_path_uses_bucket_subdir_and_sha1(self):
+		# Verify path layout: <cache_dir>/<bucket>/<sha1>.png
+		cache = ThumbnailCache(self.cache_dir)
+		path = cache._disk_path('/img.png', mtime_ns=1, size_bucket=256)
+		parts = path.replace(self.cache_dir, '').strip(os.sep).split(os.sep)
+		self.assertEqual(['256', parts[1]], parts)
+		self.assertTrue(parts[1].endswith('.png'))
+		self.assertEqual(40 + 4, len(parts[1]))   # 40 hex + '.png'
+
+	def test_cache_dir_is_created_on_init(self):
+		new_dir = os.path.join(self.cache_dir, 'subdir', 'thumbs')
+		ThumbnailCache(new_dir)
+		self.assertTrue(os.path.isdir(new_dir))
