@@ -48,3 +48,59 @@ def pick_overlay_layout(tile_width_px):
 	if tile_width_px >= STACK_BREAKPOINT_PX:
 		return SPREAD
 	return STACKED
+
+
+from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtWidgets import QListView
+
+
+DEFAULT_TILE_SIZE_PX = 160
+MIN_TILE_SIZE_PX = 80
+MAX_TILE_SIZE_PX = 400
+TILE_SIZE_STEP_PX = 20
+
+# Vertical padding reserved beneath the icon for the filename label.
+_LABEL_AREA_PX = 28
+# Horizontal padding around the tile contents.
+_TILE_PADDING_PX = 12
+
+
+class GalleryView(QListView):
+	"""Grid/icon view for `DirectoryPaneWidget`.
+
+	Shares the model and selection-model with the pane's `FileListView`.
+	"""
+
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setViewMode(QListView.IconMode)
+		self.setMovement(QListView.Static)
+		self.setResizeMode(QListView.Adjust)
+		self.setWrapping(True)
+		self.setFlow(QListView.LeftToRight)
+		self.setUniformItemSizes(True)
+		self.setWordWrap(True)
+		self.setSelectionMode(QListView.ExtendedSelection)
+		self.setEditTriggers(QListView.NoEditTriggers)
+		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+		self._tile_size = DEFAULT_TILE_SIZE_PX
+		self._apply_tile_size()
+
+	def set_tile_size(self, px):
+		"""Clamp `px` to [MIN, MAX] and update the icon/grid size."""
+		px = max(MIN_TILE_SIZE_PX, min(MAX_TILE_SIZE_PX, int(px)))
+		if px == self._tile_size:
+			return
+		self._tile_size = px
+		self._apply_tile_size()
+
+	def get_tile_size(self):
+		return self._tile_size
+
+	def _apply_tile_size(self):
+		icon_px = self._tile_size
+		self.setIconSize(QSize(icon_px, icon_px))
+		self.setGridSize(QSize(
+			icon_px + _TILE_PADDING_PX,
+			icon_px + _LABEL_AREA_PX
+		))
