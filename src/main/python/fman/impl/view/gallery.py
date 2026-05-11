@@ -291,11 +291,18 @@ class GalleryItemDelegate(QStyledItemDelegate):
 			fm = QFontMetrics(painter.font())
 			y = icon_rect.top() + _OVERLAY_INSET_PX
 			x = icon_rect.left() + _OVERLAY_INSET_PX
-			badges = [b for b in (ext, res_text, size_text) if b]
-			for i, text in enumerate(badges):
+			# (text, should_elide) pairs in display order. Only the
+			# resolution row elides — extension and size are already short.
+			rows = [
+				(ext, False),
+				(res_text, True),
+				(size_text, False),
+			]
+			for text, should_elide in rows:
+				if not text:
+					continue
 				display = text
-				# Elide the resolution row (index depends on what's present).
-				if text is res_text and res_text is not None:
+				if should_elide:
 					display = fm.elidedText(
 						text, Qt.ElideRight,
 						max_col_w - 2 * _OVERLAY_PADDING_X
