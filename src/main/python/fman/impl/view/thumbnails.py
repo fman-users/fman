@@ -92,6 +92,11 @@ class ThumbnailCache(QObject):
 		self._mem_pixmaps = {}           # key -> QPixmap
 		self._resolutions = {}           # (path, mtime_ns) -> QSize
 		self._pending = set()            # set of keys currently generating
+		# Keys whose generator emitted (key, None). Tracked so we don't
+		# re-schedule generation on every paint event for unreadable
+		# images, which would otherwise cause a runaway loop because
+		# `thumbnail_ready` triggers a full viewport repaint.
+		self._failed = set()
 		self._signals = _GeneratorSignals()
 		self._signals.done.connect(self._on_generated)
 		self._pool = QThreadPool.globalInstance()
@@ -126,7 +131,11 @@ class ThumbnailCache(QObject):
 			return
 		bucket = pick_size_bucket(requested_px)
 		key = cache_key(absolute_path, mtime_ns, bucket)
-		if key in self._mem_pixmaps or key in self._pending:
+		if (
+			key in self._mem_pixmaps
+			or key in self._pending
+			or key in self._failed
+		):
 			return
 		self._pending.add(key)
 		self._key_for[key] = (absolute_path, mtime_ns, bucket)
@@ -155,6 +164,11 @@ class ThumbnailCache(QObject):
 	def _on_generated(self, key, image):
 		self._pending.discard(key)
 		if image is None or image.isNull():
+			# Remember the failure so future request(...) calls don't
+			# re-schedule generation, and drop the lookup entry to avoid
+			# a memory leak per failed image.
+			self._failed.add(key)
+			self._key_for.pop(key, None)
 			return
 		path, mtime_ns, bucket = self._key_for.pop(key, (None, None, None))
 		if path is None:

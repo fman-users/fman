@@ -105,3 +105,58 @@ class ThumbnailCacheDiskTest(TestCase):
 		new_dir = os.path.join(self.cache_dir, 'subdir', 'thumbs')
 		ThumbnailCache(new_dir)
 		self.assertTrue(os.path.isdir(new_dir))
+
+
+class ThumbnailCacheFailedImageTest(TestCase):
+	"""Regression test: unreadable images must not be re-scheduled forever.
+
+	When ``_Generator`` reports ``None`` (i.e. ``QImageReader.read()``
+	returned a null image), the cache must remember the key as failed so
+	that subsequent ``request(...)`` calls short-circuit instead of
+	re-scheduling generation on every paint event.
+	"""
+
+	def setUp(self):
+		self._tmp = tempfile.TemporaryDirectory()
+		self.cache_dir = self._tmp.name
+		# Create a real on-disk file so os.stat(...) succeeds, but its
+		# contents are not a valid image. The generator would fail to
+		# decode it - we simulate that directly via _on_generated below.
+		self.bad_path = os.path.join(self.cache_dir, 'broken.png')
+		with open(self.bad_path, 'wb') as f:
+			f.write(b'not a real image')
+
+	def tearDown(self):
+		self._tmp.cleanup()
+
+	def test_failed_image_is_remembered(self):
+		from fman.impl.view.thumbnails import cache_key, pick_size_bucket
+		cache = ThumbnailCache(self.cache_dir)
+		mtime_ns = os.stat(self.bad_path).st_mtime_ns
+		bucket = pick_size_bucket(128)
+		key = cache_key(self.bad_path, mtime_ns, bucket)
+		# Pretend the generator was scheduled.
+		cache._pending.add(key)
+		cache._key_for[key] = (self.bad_path, mtime_ns, bucket)
+		# Simulate the worker reporting that decoding failed:
+		cache._on_generated(key, None)
+		self.assertIn(key, cache._failed)
+		self.assertNotIn(key, cache._key_for)
+		self.assertNotIn(key, cache._pending)
+
+	def test_request_skips_failed_keys(self):
+		# After a failure, request(...) must not re-add the key to
+		# _pending - otherwise paint events would re-schedule on every
+		# frame.
+		cache = ThumbnailCache(self.cache_dir)
+		# Trigger one request which marks _pending, then mark it failed:
+		cache.request(self.bad_path, 128)
+		# Drain to failure synchronously by replicating what the worker
+		# emits for a null image.
+		key = next(iter(cache._pending))
+		cache._on_generated(key, None)
+		self.assertIn(key, cache._failed)
+		# A subsequent paint cycle would call request again. It must not
+		# re-add the key to _pending.
+		cache.request(self.bad_path, 128)
+		self.assertNotIn(key, cache._pending)
