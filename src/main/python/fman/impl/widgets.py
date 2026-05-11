@@ -7,8 +7,7 @@ from fman.impl.util.qt import disable_window_animations_mac, Key_Escape, \
 from fman.impl.util.qt.thread import run_in_main_thread
 from fman.impl.view.location_bar import LocationBar
 from fman.impl.view import FileListView, Layout, set_selection
-from fman.impl.view.gallery import GalleryView, GalleryItemDelegate, \
-	DEFAULT_TILE_SIZE_PX
+from fman.impl.view.gallery import GalleryView, GalleryItemDelegate
 from fman.impl.view.thumbnails import ThumbnailCache
 from fman.url import as_human_readable, basename
 from PyQt5.QtCore import pyqtSignal, QTimer, Qt, QEvent, QSize
