@@ -50,9 +50,12 @@ def pick_overlay_layout(tile_width_px):
 	return STACKED
 
 
+from fbs_runtime.platform import is_mac, is_windows, is_linux
+from fman.impl.util.qt import AltModifier, ControlModifier, CopyAction, \
+	MoveAction, NoButton
 from PyQt5.QtCore import QItemSelectionModel as QISM, QSize, Qt, pyqtSignal
 from PyQt5.QtGui import QContextMenuEvent, QKeySequence
-from PyQt5.QtWidgets import QAction, QListView
+from PyQt5.QtWidgets import QAbstractItemView, QAction, QListView
 
 
 DEFAULT_TILE_SIZE_PX = 160
@@ -74,12 +77,21 @@ class GalleryView(QListView):
 
 	tile_size_changed = pyqtSignal(int)   # new tile size in px
 
+	# Drag/drop "idle" states. Same definition the ``DragAndDrop`` mixin
+	# uses for ``FileListView`` -- duplicated here to keep ``GalleryView``
+	# self-contained while we don't yet share a common base.
+	_IDLE_STATES = (
+		QAbstractItemView.NoState, QAbstractItemView.AnimatingState
+	)
+
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		# Populated by the owning ``DirectoryPaneWidget``. Mirrors
 		# ``FileListView._get_context_menu`` -- a callable returning the
 		# list of ``(caption, shortcut, callback)`` tuples to display.
 		self._get_context_menu = None
+		# Bookkeeping for drag-out (see mouseMoveEvent / startDrag below).
+		self._dragged_index = None
 		self.setViewMode(QListView.IconMode)
 		self.setMovement(QListView.Static)
 		self.setResizeMode(QListView.Adjust)
@@ -90,6 +102,17 @@ class GalleryView(QListView):
 		self.setSelectionMode(QListView.ExtendedSelection)
 		self.setEditTriggers(QListView.NoEditTriggers)
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+		# Drag/drop: mirror the configuration of the ``DragAndDrop`` mixin
+		# used by ``FileListView``. The model implements ``mimeData`` and
+		# ``dropMimeData`` (see ``fman.impl.model.drag_and_drop``) so Qt
+		# handles the data transfer; we only need to set the right modes
+		# and pick the action (move/copy) in ``dropEvent`` below.
+		self.setDragEnabled(True)
+		self.setAcceptDrops(True)
+		self.setDragDropMode(QListView.DragDrop)
+		self.setDefaultDropAction(MoveAction)
+		self.setDropIndicatorShown(True)
+		self.setDragDropOverwriteMode(True)
 		# Mirrors `FileListView.key_press_event_filter`: the owning
 		# `DirectoryPaneWidget` wires this to its `_on_key_pressed`, which
 		# routes the keypress through the controller (filter bar, plugin
@@ -189,6 +212,70 @@ class GalleryView(QListView):
 		finally:
 			if updated_selection:
 				self.clearSelection()
+
+	# ----------------------------------------------------- drag and drop
+	# The three overrides below mirror ``fman.impl.view.drag_and_drop``.
+	# That mixin extends ``QTableView`` so it can't be applied directly
+	# to a ``QListView``; the logic itself only uses ``QAbstractItemView``
+	# APIs though, so we duplicate it here verbatim (modulo class name).
+
+	def mouseMoveEvent(self, event):
+		if event.buttons() != NoButton and self.state() in self._IDLE_STATES:
+			self._dragged_index = self.indexAt(event.pos())
+			if self._dragged_index.isValid():
+				# Qt's default implementation only starts dragging when
+				# there are selected items. We also want to start
+				# dragging when there aren't (because in this case we
+				# drag the focus item):
+				self.setState(self.DraggingState)
+				# startDrag(...) below now initiates drag and drop.
+				return
+		else:
+			super().mouseMoveEvent(event)
+
+	def startDrag(self, supportedActions):
+		if not self._dragged_index or not self._dragged_index.isValid():
+			return
+		if self._dragged_index in self.selectedIndexes():
+			super().startDrag(supportedActions)
+		else:
+			# The default implementation of Qt only supports dragging the
+			# currently selected item(s). We therefore briefly need to
+			# "select" the items we wish to drag. This has the
+			# (unintended) side-effect that the dragged items are also
+			# rendered as being selected.
+			selection = self.selectionModel().selection()
+			current = self.selectionModel().currentIndex()
+			try:
+				self.selectionModel().clear()
+				self.setCurrentIndex(self._dragged_index)
+				self.selectionModel().select(
+					self._dragged_index, QISM.ClearAndSelect | QISM.Rows
+				)
+				super().startDrag(supportedActions)
+			finally:
+				self.selectionModel().select(selection, QISM.ClearAndSelect)
+				self.selectionModel().setCurrentIndex(current, QISM.NoUpdate)
+
+	def dropEvent(self, event):
+		modifiers = event.keyboardModifiers()
+		if is_mac():
+			do_copy = modifiers & AltModifier
+		elif is_linux():
+			do_copy = (
+				(modifiers & ControlModifier) or (modifiers & AltModifier)
+			)
+		else:
+			# Windows
+			do_copy = modifiers & ControlModifier
+		action = CopyAction if do_copy else MoveAction
+		event.setDropAction(action)
+		super().dropEvent(event)
+		if action == MoveAction and is_windows():
+			# If we accept the event (which super().dropEvent(...) does
+			# above), then Windows moves the file to the Recycle Bin!!!
+			# Avoid this:
+			event.ignore()
 
 
 import os
