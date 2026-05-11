@@ -78,6 +78,9 @@ class DirectoryPaneWidget(QWidget):
 		# path as the file-list view so plugin shortcuts (e.g. Ctrl+G to
 		# toggle back to list mode) keep working.
 		self._gallery_view.key_press_event_filter = self._on_key_pressed
+		# Show the same plugin-driven context menu as the file-list view.
+		self._gallery_view._get_context_menu = \
+			lambda *args: controller.on_context_menu(self, *args)
 		self._thumbnail_cache.thumbnail_ready.connect(
 			lambda _path: self._gallery_view.viewport().update()
 		)

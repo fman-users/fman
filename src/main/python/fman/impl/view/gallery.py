@@ -50,8 +50,9 @@ def pick_overlay_layout(tile_width_px):
 	return STACKED
 
 
-from PyQt5.QtCore import QSize, Qt, pyqtSignal
-from PyQt5.QtWidgets import QListView
+from PyQt5.QtCore import QItemSelectionModel as QISM, QSize, Qt, pyqtSignal
+from PyQt5.QtGui import QContextMenuEvent, QKeySequence
+from PyQt5.QtWidgets import QAction, QListView
 
 
 DEFAULT_TILE_SIZE_PX = 160
@@ -75,6 +76,10 @@ class GalleryView(QListView):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
+		# Populated by the owning ``DirectoryPaneWidget``. Mirrors
+		# ``FileListView._get_context_menu`` -- a callable returning the
+		# list of ``(caption, shortcut, callback)`` tuples to display.
+		self._get_context_menu = None
 		self.setViewMode(QListView.IconMode)
 		self.setMovement(QListView.Static)
 		self.setResizeMode(QListView.Adjust)
@@ -141,6 +146,49 @@ class GalleryView(QListView):
 				event.accept()
 				return
 		super().keyPressEvent(event)
+
+	def contextMenuEvent(self, event):
+		# Mirrors ``FileListView.contextMenuEvent`` adapted for QListView.
+		# See the long comment in the file-list version for the rationale
+		# behind the mouse-click selection reset.
+		if self._get_context_menu is None:
+			return
+		# Imported lazily to avoid a circular import between this module
+		# and ``fman.impl.view`` (which itself imports ``GalleryView``
+		# indirectly via widgets.py during app startup).
+		from fman.impl.view import Menu
+		index = self.indexAt(event.pos())
+		updated_selection = False
+		if index.isValid():
+			file_under_mouse = self.model().url(index)
+			if event.reason() == QContextMenuEvent.Mouse:
+				selection_model = self.selectionModel()
+				if not selection_model.isSelected(index):
+					selection_model.select(
+						index, QISM.ClearAndSelect | QISM.Rows
+					)
+					updated_selection = True
+		else:
+			file_under_mouse = None
+		try:
+			menu = Menu(self)
+			entries = self._get_context_menu(event, file_under_mouse)
+			if not entries:
+				return
+			for caption, shortcut, callback in entries:
+				if caption == '-':
+					menu.addSeparator()
+				else:
+					action = QAction(caption, self)
+					# Need `c=callback` to create one lambda per loop:
+					action.triggered.connect(lambda _, c=callback: c())
+					if shortcut:
+						action.setShortcut(QKeySequence(shortcut))
+					menu.addAction(action)
+			menu.exec(event.globalPos())
+		finally:
+			if updated_selection:
+				self.clearSelection()
 
 
 import os
