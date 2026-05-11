@@ -31,3 +31,20 @@ def truncate_filename(name, max_chars):
 	if len(full) <= max_chars:
 		return full
 	return first + ELLIPSIS
+
+# Overlay layout (see design spec, section "Overlay layouts").
+SPREAD = 'spread'
+STACKED = 'stacked'
+STACK_BREAKPOINT_PX = 140
+
+
+def pick_overlay_layout(tile_width_px):
+	"""Return ``SPREAD`` or ``STACKED`` based on tile width.
+
+	At or above ``STACK_BREAKPOINT_PX``, the three overlay badges sit in
+	the corners (TL, TR, BR). Below it, they collapse into a single
+	vertical column in the top-left to avoid overlap.
+	"""
+	if tile_width_px >= STACK_BREAKPOINT_PX:
+		return SPREAD
+	return STACKED
