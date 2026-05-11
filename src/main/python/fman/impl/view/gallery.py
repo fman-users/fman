@@ -85,6 +85,13 @@ class GalleryView(QListView):
 		self.setSelectionMode(QListView.ExtendedSelection)
 		self.setEditTriggers(QListView.NoEditTriggers)
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+		# Mirrors `FileListView.key_press_event_filter`: the owning
+		# `DirectoryPaneWidget` wires this to its `_on_key_pressed`, which
+		# routes the keypress through the controller (filter bar, plugin
+		# shortcuts, etc.). Without this hook, the user would be stuck in
+		# gallery mode because `Ctrl+G` (and every other plugin shortcut)
+		# would never reach `controller.handle_shortcut(...)`.
+		self.key_press_event_filter = lambda event: False
 		self._tile_size = DEFAULT_TILE_SIZE_PX
 		self._apply_tile_size()
 
@@ -109,6 +116,14 @@ class GalleryView(QListView):
 		))
 
 	def keyPressEvent(self, event):
+		# Give the controller (via `DirectoryPaneWidget._on_key_pressed`)
+		# first crack at the key. This is what dispatches plugin
+		# shortcuts -- crucially `Ctrl+G` (toggle_gallery_view), without
+		# which the user could not leave gallery mode.
+		# Resize keys (Ctrl/Cmd + +/-/0) are not claimed by any plugin so
+		# they still reach the branch below.
+		if self.key_press_event_filter(event):
+			return
 		mod = event.modifiers()
 		ctrl_or_cmd = bool(mod & Qt.ControlModifier) or bool(mod & Qt.MetaModifier)
 		if ctrl_or_cmd:

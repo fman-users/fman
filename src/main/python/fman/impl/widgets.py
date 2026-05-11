@@ -74,6 +74,10 @@ class DirectoryPaneWidget(QWidget):
 			parent=self._gallery_view,
 		))
 		self._gallery_view.doubleClicked.connect(self._on_doubleclicked)
+		# Route keypresses in gallery mode through the same controller
+		# path as the file-list view so plugin shortcuts (e.g. Ctrl+G to
+		# toggle back to list mode) keep working.
+		self._gallery_view.key_press_event_filter = self._on_key_pressed
 		self._thumbnail_cache.thumbnail_ready.connect(
 			lambda _path: self._gallery_view.viewport().update()
 		)
