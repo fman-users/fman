@@ -41,8 +41,7 @@ class SessionManager:
 			pane_infos = [{}] * self.DEFAULT_NUM_PANES
 		panes = [window.add_pane() for _ in range(len(pane_infos))]
 		self._show_startup_messages(main_window)
-		is_first_run = not self._settings
-		if is_first_run:
+		if self.is_first_run:
 			main_window.showMaximized()
 		else:
 			# In this case, we assume that _restore_window_geometry restored the
@@ -68,13 +67,6 @@ class SessionManager:
 				'Updated to v%s. <a href="https://fman.io/changelog?s=f">' \
 				'Changelog</a>' % self._fman_version
 		main_window.show_status_message(status_message, timeout_secs=5)
-	def _get_startup_message(self):
-		previous_version = self._settings.get('fman_version', None)
-		if not previous_version or previous_version == self._fman_version:
-			return 'v%s ready.' % self._fman_version
-		return 'Updated to v%s. ' \
-			   '<a href="https://fman.io/changelog?s=f">Changelog</a>' \
-			   % self._fman_version
 	def _init_panes(self, panes, pane_infos, paths_on_cmdline):
 		with ThreadPoolExecutor(max_workers=len(panes)) as executor:
 			futures = [
@@ -163,7 +155,7 @@ class SessionManager:
 		try:
 			self._settings.flush()
 		except OSError:
-			pass
+			_LOG.warning('Failed to save settings', exc_info=True)
 	def _read_pane_settings(self, pane):
 		return {
 			'location': pane.get_location(),

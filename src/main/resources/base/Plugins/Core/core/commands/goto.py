@@ -50,7 +50,6 @@ class GoTo(DirectoryPaneCommand):
 				result += os.sep
 			return result
 	def _get_visited_paths(self):
-		# TODO: Rename to Visited Locations.json?
 		result = load_json('Visited Paths.json', default={})
 		# Check for length 2 because the directories in which fman opens are
 		# already in Visited Paths:
@@ -126,8 +125,9 @@ class GoTo(DirectoryPaneCommand):
 				except OSError:
 					pass
 				else:
-					already_yielded.add(stat.st_ino)
-					to_visit.append((stat, file_path))
+					if stat.st_ino not in already_yielded:
+						already_yielded.add(stat.st_ino)
+						to_visit.append((stat, file_path))
 			to_visit.sort(key=lambda tpl: tpl[0].st_mtime)
 
 class GoToListener(DirectoryPaneListener):

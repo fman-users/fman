@@ -15,11 +15,13 @@ def basename_starts_with(path, query):
 		return [i + offset for i in range(len(query))]
 
 def contains_chars(text, query):
+	text_lower = text.lower()
+	query_lower = query.lower()
 	indices = []
 	i = 0
-	for char in query:
+	for char in query_lower:
 		try:
-			i += text[i:].index(char)
+			i += text_lower[i:].index(char)
 		except ValueError:
 			return None
 		indices.append(i)
@@ -28,7 +30,7 @@ def contains_chars(text, query):
 
 def contains_substring(text, query):
 	try:
-		start = text.index(query)
+		start = text.lower().index(query.lower())
 	except ValueError:
 		return None
 	return list(range(start, start + len(query)))

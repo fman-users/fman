@@ -65,6 +65,8 @@ class LocalFileSystem(FileSystem):
 			os_path.touch(exist_ok=False)
 		except FileExistsError:
 			os_path.touch(exist_ok=True)
+			self.cache.clear(path)
+			self.notify_file_changed(path)
 		else:
 			self.notify_file_added(path)
 	def mkdir(self, path):
@@ -152,6 +154,7 @@ class LocalFileSystem(FileSystem):
 		dst_path = splitscheme(dst_url)[1]
 		os_dst_path = self._url_to_os_path(dst_path)
 		Path(os_src_path).replace(os_dst_path)
+		self.cache.clear(dst_path)
 		self.notify_file_removed(src_path)
 		self.notify_file_added(dst_path)
 	def move_to_trash(self, path):

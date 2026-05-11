@@ -120,8 +120,13 @@ class DevelopmentApplicationContext(ApplicationContext):
 		Thread(target=_load, daemon=True).start()
 	def on_main_window_close(self):
 		self.session_manager.on_close(self.main_window)
+		for pane in self.main_window.get_panes():
+			pane._model.shutdown()
 	def on_quit(self):
+		from fman.impl.plugins.plugin import ListenerWrapper
+		ListenerWrapper.shutdown_pool(wait=False)
 		self.config.on_quit()
+		self.metrics.shutdown()
 		if self.metrics_logging_enabled:
 			log_dir = dirname(self._get_metrics_json_path())
 			log_file_path = join(log_dir, 'Metrics.log')
@@ -431,29 +436,11 @@ class FrozenApplicationContext(DevelopmentApplicationContext):
 		logging.basicConfig(level=logging.CRITICAL)
 	def on_main_window_shown(self):
 		if PLATFORM == 'Linux':
-			"""
-			PyInstaller sets LD_LIBRARY_PATH to /opt/fman. Processes we spawn,
-			be it via Popen(...) or QDesktopServices.openUrl(...), inherit this
-			value. This leads to problems, especially when the app we launch is
-			based on Qt. The reason is that the OS then attempts to load our 
-			libraries, which are most likely incompatible with those of the app.
-			An example where this happens is VLC, which errors out with 'This 
-			application failed to start because it could not find or load the Qt
-			platform plugin "xcb"'. Plugin developers have also encountered this
-			unexpected behaviour when trying to launch apps.
-			
-			To fix the problem, we restore LD_LIBRARY_PATH to its original value
-			here. According to the docs [1], PyInstaller stores this value in a
-			separate environment variable.
-			
-			A drawback of unsetting the environment variable here is that
-			libraries from PyInstaller's search path cannot be loaded after this
-			method was called. In other words, we assume that all required
-			libraries have been loaded once we reach here. This assumption may
-			turn out to be wrong in the future.
-			
-			[1]: http://pyinstaller.readthedocs.io/en/stable/runtime-information.html#ld-library-path-libpath-considerations
-			"""
+			# PyInstaller sets LD_LIBRARY_PATH to /opt/fman. Processes we spawn
+			# inherit this value, causing problems when the launched app is
+			# Qt-based (it tries to load our incompatible libraries).
+			# We restore LD_LIBRARY_PATH to its original value here.
+			# See: https://pyinstaller.org/en/stable/runtime-information.html
 			lp_orig = os.environ.pop('LD_LIBRARY_PATH_ORIG', None)
 			if lp_orig is not None:
 				os.environ['LD_LIBRARY_PATH'] = lp_orig
