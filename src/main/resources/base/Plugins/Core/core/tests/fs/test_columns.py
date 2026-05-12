@@ -1,7 +1,7 @@
 from core import Name, Size, Modified
 from core.tests import StubFS
 from core.tests.fs import StubFileSystem
-from fman.url import as_url
+from vitraj.url import as_url
 from unittest import TestCase
 
 class ColumnTest:

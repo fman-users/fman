@@ -1,6 +1,6 @@
 from collections import namedtuple
-from fman import PLATFORM
-from fman.url import join, as_url, splitscheme
+from vitraj import PLATFORM
+from vitraj.url import join, as_url, splitscheme
 from core import LocalFileSystem
 from pathlib import Path
 from stat import S_IWRITE

@@ -1,6 +1,14 @@
-QTableView, QMessageBox, QDialog, QListView {
+QTableView, QMessageBox, QDialog, QListView, QPlainTextEdit {
 	background-color: #272822;
 	border: none;
+}
+
+QPlainTextEdit {
+	color: white;
+}
+
+#preview-header {
+	color: white;
 }
 
 QHeaderView, QHeaderView::section {

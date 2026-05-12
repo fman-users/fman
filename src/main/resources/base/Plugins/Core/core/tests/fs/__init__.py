@@ -1,6 +1,6 @@
-from fman.fs import FileSystem, cached
-from fman.impl.util import filenotfounderror
-from fman.impl.util.path import normalize
+from vitraj.fs import FileSystem, cached
+from vitraj.impl.util import filenotfounderror
+from vitraj.impl.util.path import normalize
 
 class StubFileSystem(FileSystem):
 

@@ -5,7 +5,7 @@ from fbs.cmdline import command
 from fbs.freeze.mac import freeze_mac
 from glob import glob
 from os import remove
-from os.path import basename, join
+from os.path import join
 from shutil import rmtree, move
 from subprocess import run, PIPE, CalledProcessError, SubprocessError
 from time import sleep
@@ -37,19 +37,47 @@ def freeze():
 		path('lib/mac/Sparkle-1.22.0/Sparkle.framework'),
 		path('${freeze_dir}/Contents/Frameworks/Sparkle.framework')
 	)
-	copy_python_library('osxtrash', path('${core_plugin_in_freeze_dir}'))
-	import osxtrash
-	so_name = basename(osxtrash.__file__)
-	# Move the .so to Frameworks (where PyInstaller 6.x sets sys._MEIPASS),
-	# so it's both importable and codesigned:
-	move(
-		path('${core_plugin_in_freeze_dir}/' + so_name),
-		path('${freeze_dir}/Contents/Frameworks')
-	)
 	move(
 		path('${core_plugin_in_freeze_dir}/bin/mac/7za'),
 		path('${freeze_dir}/Contents/MacOS')
 	)
+	# Ad-hoc sign so macOS shows TCC permission dialogs for folder access.
+	# Without this, unsigned apps are silently denied access to Downloads etc.
+	run(['codesign', '--force', '--deep', '--sign', '-', path('${freeze_dir}')],
+		check=True)
+
+def _strip_unused_from_bundle():
+	frameworks = path('${freeze_dir}/Contents/Frameworks')
+	resources = path('${freeze_dir}/Contents/Resources')
+	# boto3/botocore are build-system-only deps, not used at runtime (~40MB):
+	for dir_name in ('boto3', 'botocore', 's3transfer'):
+		for base in (frameworks, resources):
+			dir_path = join(base, dir_name)
+			if os.path.islink(dir_path):
+				os.unlink(dir_path)
+			elif os.path.isdir(dir_path):
+				rmtree(dir_path)
+	# Remove unused Qt frameworks (fman only uses Core, Gui, Widgets,
+	# MacExtras, PrintSupport, Svg):
+	qt_lib = join(frameworks, 'PyQt5', 'Qt5', 'lib')
+	for unused_fw in (
+		'QtQml', 'QtQmlModels', 'QtQuick', 'QtWebSockets'
+	):
+		fw_path = join(qt_lib, unused_fw + '.framework')
+		if os.path.isdir(fw_path):
+			rmtree(fw_path)
+	# Remove unused Qt platform plugins:
+	qt_plugins = join(frameworks, 'PyQt5', 'Qt5', 'plugins')
+	for unused_plugin in (
+		'platforms/libqwebgl.dylib', 'platforms/libqminimal.dylib',
+		'platforms/libqoffscreen.dylib', 'bearer', 'generic',
+		'platformthemes'
+	):
+		p = join(qt_plugins, unused_plugin)
+		if os.path.isdir(p):
+			rmtree(p)
+		elif os.path.isfile(p):
+			remove(p)
 
 def _strip_unused_from_bundle():
 	frameworks = path('${freeze_dir}/Contents/Frameworks')
@@ -145,17 +173,22 @@ def _notarize(file_path, query_interval_secs=10):
 		raise RuntimeError('Unexpected notarization status: %r' % status)
 
 def _run_altool(args):
+	user = os.environ.get(
+		'FMAN_APPLE_DEVELOPER_USER', SETTINGS.get('apple_developer_user', '')
+	)
+	pw = os.environ.get(
+		'FMAN_APPLE_DEVELOPER_APP_PW', SETTINGS.get('apple_developer_app_pw', '')
+	)
 	all_args = [
 		'xcrun', 'altool', '--output-format', 'xml',
-		'-u', SETTINGS['apple_developer_user'],
-		'-p', SETTINGS['apple_developer_app_pw']
+		'-u', user, '-p', pw
 	] + args
 	process = run(all_args, stdout=PIPE, stderr=PIPE, check=True)
 	return plistlib.loads(process.stdout)
 
 @command
 def sign_installer():
-	dmg_path = path('target/fman.dmg')
+	dmg_path = path('target/vitraj.dmg')
 	_run_codesign(dmg_path)
 	_notarize(dmg_path)
 	_staple(dmg_path)
@@ -172,7 +205,7 @@ def upload():
 	for patch_file in glob(path('target/autoupdate/*.delta')):
 		upload_file(patch_file, _UPDATES_DIR)
 	if SETTINGS['release']:
-		upload_installer_to_aws('fman.dmg')
+		upload_installer_to_aws('vitraj.dmg')
 
 def _zip_mac(src_dir, dest_zip):
 	run([

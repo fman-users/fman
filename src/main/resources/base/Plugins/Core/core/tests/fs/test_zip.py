@@ -2,7 +2,7 @@ from errno import ENOENT
 from core.fs.zip import ZipFileSystem
 from core.tests import StubFS
 from datetime import date
-from fman.url import as_url, join, as_human_readable, splitscheme
+from vitraj.url import as_url, join, as_human_readable, splitscheme
 from os import listdir
 from pathlib import Path
 from shutil import copyfile

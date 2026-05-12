@@ -1,10 +1,10 @@
 from core.commands.util import get_user, is_hidden
 from core.quicksearch_matchers import path_starts_with, basename_starts_with, \
 	contains_substring, contains_chars
-from fman import DirectoryPaneCommand, show_quicksearch, PLATFORM, load_json, \
+from vitraj import DirectoryPaneCommand, show_quicksearch, PLATFORM, load_json, \
 	DirectoryPaneListener, QuicksearchItem
-from fman.fs import exists, resolve
-from fman.url import as_url, splitscheme, as_human_readable
+from vitraj.fs import exists, resolve
+from vitraj.url import as_url, splitscheme, as_human_readable
 from itertools import islice, chain
 from os.path import expanduser, islink, isabs, normpath
 from pathlib import Path, PurePath

@@ -1,17 +1,17 @@
 from core.commands import *
 from core.fs import *
 from datetime import datetime
-from fman.fs import Column
-from fman.url import basename
+from vitraj.fs import Column
+from vitraj.url import basename
 from math import log
 from PyQt5.QtCore import QLocale, QDateTime
 
-import fman.fs
+import vitraj.fs
 import re
 
 # Define here so get_default_columns(...) can reference it as core.Name:
 class Name(Column):
-	def __init__(self, fs=fman.fs):
+	def __init__(self, fs=vitraj.fs):
 		super().__init__()
 		self._fs = fs
 	def get_str(self, url):
@@ -39,7 +39,7 @@ class Name(Column):
 
 # Define here so get_default_columns(...) can reference it as core.Size:
 class Size(Column):
-	def __init__(self, fs=fman.fs):
+	def __init__(self, fs=vitraj.fs):
 		super().__init__()
 		self._fs = fs
 	def get_str(self, url):
@@ -86,7 +86,7 @@ class Size(Column):
 
 # Define here so get_default_columns(...) can reference it as core.Modified:
 class Modified(Column):
-	def __init__(self, fs=fman.fs):
+	def __init__(self, fs=vitraj.fs):
 		super().__init__()
 		self._fs = fs
 	def get_str(self, url):

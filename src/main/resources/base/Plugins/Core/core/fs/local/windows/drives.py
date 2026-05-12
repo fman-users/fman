@@ -1,8 +1,8 @@
 from core.fs.local.windows.network import NetworkFileSystem
 from core.util import filenotfounderror
 from ctypes import windll
-from fman.fs import FileSystem, Column
-from fman.url import as_url, splitscheme
+from vitraj.fs import FileSystem, Column
+from vitraj.url import as_url, splitscheme
 
 import ctypes
 import string

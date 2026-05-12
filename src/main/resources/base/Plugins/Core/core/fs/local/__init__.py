@@ -2,10 +2,10 @@ from core.trash import move_to_trash
 from core.util import filenotfounderror
 from datetime import datetime
 from errno import ENOENT
-from fman import PLATFORM, Task
-from fman.fs import FileSystem, cached
-from fman.impl.util.qt.thread import run_in_main_thread
-from fman.url import as_url, splitscheme, as_human_readable, join, basename, \
+from vitraj import PLATFORM, Task
+from vitraj.fs import FileSystem, cached
+from vitraj.impl.util.qt.thread import run_in_main_thread
+from vitraj.url import as_url, splitscheme, as_human_readable, join, basename, \
 	dirname
 from io import UnsupportedOperation
 from os import remove, rmdir

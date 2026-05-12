@@ -1,6 +1,6 @@
 from core.commands.goto import _shrink_visited_paths, SuggestLocations
 from core.util import filenotfounderror
-from fman import PLATFORM
+from vitraj import PLATFORM
 from os.path import normpath
 from unittest import TestCase, skipIf
 

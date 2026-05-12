@@ -17,4 +17,6 @@ def get_user():
 		return os.path.basename(expanduser('~'))
 
 def is_hidden(file_path):
+	if os.path.basename(file_path).startswith('.'):
+		return True
 	return QFileInfo(file_path).isHidden()

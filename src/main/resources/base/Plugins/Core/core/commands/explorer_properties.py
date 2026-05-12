@@ -1,6 +1,6 @@
-from fman import DirectoryPaneCommand, show_alert
-from fman.fs import resolve
-from fman.url import splitscheme, as_human_readable, basename, dirname
+from vitraj import DirectoryPaneCommand, show_alert
+from vitraj.fs import resolve
+from vitraj.url import splitscheme, as_human_readable, basename, dirname
 from pywintypes import com_error
 from win32com.shell.shell import SHILCreateFromPath, SHGetDesktopFolder, \
 	IID_IShellFolder, IID_IContextMenu

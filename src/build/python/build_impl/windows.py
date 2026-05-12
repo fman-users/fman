@@ -30,7 +30,7 @@ def _copy_winpty_files():
 @command
 def upload():
 	if SETTINGS['release']:
-		src_path = path('target/fmanSetup.exe')
-		dest_path = SETTINGS['version'] + '/fmanSetup.exe'
+		src_path = path('target/vitrajSetup.exe')
+		dest_path = SETTINGS['version'] + '/vitrajSetup.exe'
 		upload_to_s3(src_path, dest_path)
-		print('\nDone. Please upload fmanSetup.exe to update.fman.io now.')
+		print('\nDone. Please upload vitrajSetup.exe to update.vitraj.io now.')

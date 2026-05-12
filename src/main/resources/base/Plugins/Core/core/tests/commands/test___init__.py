@@ -2,8 +2,8 @@ from core.commands import History, Move, _from_human_readable, \
 	get_dest_suggestion, _find_extension_start, _get_shortcuts_for_command
 from core.tests import StubUI
 from core.util import filenotfounderror
-from fman import OK, YES, NO, PLATFORM
-from fman.url import join, as_human_readable, as_url, dirname
+from vitraj import OK, YES, NO, PLATFORM
+from vitraj.url import join, as_human_readable, as_url, dirname
 from unittest import TestCase
 
 import os

@@ -7,12 +7,12 @@ from core.os_ import open_terminal_in_directory, open_native_file_manager, \
 from core.util import strformat_dict_values, listdir_absolute, is_parent
 from core.quicksearch_matchers import contains_chars, \
 	contains_chars_after_separator
-from fman import *
-from fman.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
+from vitraj import *
+from vitraj.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
 	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, \
 	FileSystem, prepare_trash, query, makedirs, notify_file_added
-from fman.impl.util import get_user
-from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
+from vitraj.impl.util import get_user
+from vitraj.url import splitscheme, as_url, join, basename, as_human_readable, \
 	dirname, relpath, normalize
 from io import UnsupportedOperation
 from itertools import chain
@@ -26,7 +26,7 @@ from tempfile import TemporaryDirectory
 from urllib.error import URLError
 
 import errno
-import fman.fs
+import vitraj.fs
 import json
 import os
 import os.path
@@ -37,7 +37,7 @@ from .goto import *
 
 class About(ApplicationCommand):
 	def __call__(self):
-		msg = "fman version: " + FMAN_VERSION
+		msg = "vitraj version: " + FMAN_VERSION
 		msg += "\n" + self._get_registration_info()
 		show_alert(msg)
 	def _get_registration_info(self):
@@ -560,7 +560,7 @@ class _TreeCommand(DirectoryPaneCommand):
 		raise NotImplementedError()
 	@classmethod
 	def _confirm_tree_operation(
-		cls, files, dest_dir, src_dir, ui=fman, fs=fman.fs
+		cls, files, dest_dir, src_dir, ui=vitraj, fs=vitraj.fs
 	):
 		if not files:
 			ui.show_alert('No file is selected!')
@@ -1041,43 +1041,133 @@ class InitHiddenFilesFilter(DirectoryPaneListener):
 		# We need to do this somewhere when fman starts. We can't do it in the
 		# __init__ of ToggleHiddenFiles, because fman instantiates commands
 		# lazily.
-		if not _is_showing_hidden_files(self.pane):
+		self._was_showing = _is_showing_hidden_files(self.pane)
+		if not self._was_showing:
 			_toggle_hidden_files(self.pane, False)
+	def before_location_change(self, url, sort_column='', ascending=True):
+		_sync_hidden_filter(self.pane)
+	def on_command(self, command_name, args):
+		# Detect when show_hidden_files changed (e.g. by a third-party plugin
+		# that intercepted toggle_hidden_files with its own filter function).
+		showing = _is_showing_hidden_files(self.pane)
+		if showing != self._was_showing:
+			self._was_showing = showing
+			_sync_hidden_filter(self.pane)
 
 def _is_showing_hidden_files(pane):
 	return _get_pane_info(pane)['show_hidden_files']
 
 def _toggle_hidden_files(pane, value):
-	if value:
-		pane._remove_filter(_hidden_file_filter)
-	else:
-		pane._add_filter(_hidden_file_filter)
 	_get_pane_info(pane)['show_hidden_files'] = value
-	# Consider a scenario where the user:
-	#  1. shows hidden files, then
-	#  2. reloads plugins.
-	# The second step reloads the settings. This reverts 'Panes.json' to the
-	# version that was last saved. If we only relied on the save_on_quit
-	# functionality of load_json(...), then the last saved version would be the
-	# one when fman was last closed. But this does not reflect the fact that we
-	# are now showing hidden files. So we flush Panes.json immediately to disk:
+	_sync_hidden_filter(pane)
+	# Flush Panes.json immediately so a plugin reload doesn't revert the toggle:
 	save_json('Panes.json')
-	# When we toggle hidden files again, this avoids an error caused by
-	# `_remove_filter` being called for a non-active filter.
+	# Reload to apply the filter change to the current directory:
+	pane.reload()
 
 def _get_pane_info(pane):
 	settings = load_json('Panes.json', default=[])
-	default = {'show_hidden_files': False}
+	default = {'show_hidden_files': False, 'show_parent_dir_entry': False}
 	pane_index = pane.window.get_panes().index(pane)
 	for _ in range(pane_index - len(settings) + 1):
 		settings.append(default.copy())
 	return settings[pane_index]
 
+def _sync_hidden_filter(pane):
+	pane._remove_filter(_hidden_file_filter)
+	if not _is_showing_hidden_files(pane):
+		pane._add_filter(_hidden_file_filter)
+
 def _hidden_file_filter(url):
 	if PLATFORM == 'Mac' and url == 'file:///Volumes':
 		return True
+	if basename(url) == '..':
+		return True
 	scheme, path = splitscheme(url)
 	return scheme != 'file://' or not is_hidden(path)
+
+class ToggleParentDirEntry(DirectoryPaneCommand):
+
+	aliases = ('Toggle parent directory entry',
+			   'Show / hide ".." parent directory entry')
+
+	def __call__(self):
+		enabled = not _is_parent_dir_entry_enabled(self.pane)
+		_get_pane_info(self.pane)['show_parent_dir_entry'] = enabled
+		save_json('Panes.json')
+		if enabled:
+			from threading import Thread
+			Thread(target=_inject_parent_dir_entry, args=(self.pane,),
+				   daemon=True).start()
+			show_status_message('Parent directory entry enabled.')
+		else:
+			# Reload to remove the ".." entry:
+			self.pane.reload()
+			show_status_message('Parent directory entry disabled.')
+
+class InitParentDirEntry(DirectoryPaneListener):
+	def __init__(self, pane):
+		super().__init__(pane)
+		self._transaction_callback_added = False
+		self._ensure_model_watcher()
+
+	def _ensure_model_watcher(self):
+		if self._transaction_callback_added:
+			return
+		widget = self.pane._widget
+		if hasattr(widget, '_model'):
+			try:
+				widget._model.transaction_ended.connect(self._on_transaction_ended)
+				self._transaction_callback_added = True
+			except (AttributeError, TypeError):
+				pass
+
+	def _on_transaction_ended(self):
+		if _is_parent_dir_entry_enabled(self.pane):
+			from threading import Thread
+			pane = self.pane
+			Thread(target=_inject_parent_dir_entry, args=(pane,),
+				   daemon=True).start()
+
+	def on_path_changed(self):
+		self._transaction_callback_added = False
+		self._ensure_model_watcher()
+		if _is_parent_dir_entry_enabled(self.pane):
+			from threading import Thread
+			pane = self.pane
+			Thread(target=_inject_parent_dir_entry, args=(pane,),
+				   daemon=True).start()
+
+class ParentDirOpenListener(DirectoryPaneListener):
+	def on_command(self, command_name, args):
+		if command_name in ('open', 'open_directory'):
+			url = args.get('url', '')
+			if basename(url) == '..':
+				go_up(self.pane)
+				return 'noop', {}
+		return None
+
+class Noop(DirectoryPaneCommand):
+	def __call__(self, **kwargs):
+		pass
+	def is_visible(self):
+		return False
+
+def _is_parent_dir_entry_enabled(pane):
+	return _get_pane_info(pane).get('show_parent_dir_entry', False)
+
+def _inject_parent_dir_entry(pane):
+	current_url = pane.get_path()
+	parent_url = dirname(current_url)
+	# Don't show ".." at the root (dirname returns scheme only, e.g. "file://")
+	if parent_url == current_url or not splitscheme(parent_url)[1]:
+		return
+	parent_entry_url = join(current_url, '..')
+	try:
+		from vitraj.fs import notify_file_added
+		notify_file_added(parent_entry_url)
+	except Exception:
+		pass
 
 class _OpenInPaneCommand(DirectoryPaneCommand):
 	def __call__(self):
@@ -1327,6 +1417,17 @@ class GoBack(DirectoryPaneCommand):
 class GoForward(DirectoryPaneCommand):
 	def __call__(self):
 		HistoryListener.INSTANCES[self.pane].go_forward()
+
+_PANEL_EXIT_COMMANDS = frozenset(('switch_panes', 'go_to'))
+
+class PanelModeListener(DirectoryPaneListener):
+	"""Auto-close any active panel when navigating away."""
+	def on_command(self, command_name, args):
+		if command_name in _PANEL_EXIT_COMMANDS:
+			if self.pane.window.is_panel_active(self.pane):
+				self.pane.window.deactivate_panel(self.pane)
+		return None
+
 
 class HistoryListener(DirectoryPaneListener):
 
