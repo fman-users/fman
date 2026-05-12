@@ -7,13 +7,9 @@ from glob import glob
 from os import remove
 from os.path import join
 from shutil import rmtree, move
-from subprocess import run, PIPE, CalledProcessError, SubprocessError
-from time import sleep
+from subprocess import run
 
-import json
 import os
-import plistlib
-import requests
 
 _UPDATES_DIR = 'updates/mac'
 
@@ -79,45 +75,11 @@ def _strip_unused_from_bundle():
 		elif os.path.isfile(p):
 			remove(p)
 
-def _strip_unused_from_bundle():
-	frameworks = path('${freeze_dir}/Contents/Frameworks')
-	resources = path('${freeze_dir}/Contents/Resources')
-	# boto3/botocore are build-system-only deps, not used at runtime (~40MB):
-	for dir_name in ('boto3', 'botocore', 's3transfer'):
-		for base in (frameworks, resources):
-			dir_path = join(base, dir_name)
-			if os.path.islink(dir_path):
-				os.unlink(dir_path)
-			elif os.path.isdir(dir_path):
-				rmtree(dir_path)
-	# Remove unused Qt frameworks (fman only uses Core, Gui, Widgets,
-	# MacExtras, PrintSupport, Svg):
-	qt_lib = join(frameworks, 'PyQt5', 'Qt5', 'lib')
-	for unused_fw in (
-		'QtQml', 'QtQmlModels', 'QtQuick', 'QtWebSockets'
-	):
-		fw_path = join(qt_lib, unused_fw + '.framework')
-		if os.path.isdir(fw_path):
-			rmtree(fw_path)
-	# Remove unused Qt platform plugins:
-	qt_plugins = join(frameworks, 'PyQt5', 'Qt5', 'plugins')
-	for unused_plugin in (
-		'platforms/libqwebgl.dylib', 'platforms/libqminimal.dylib',
-		'platforms/libqoffscreen.dylib', 'bearer', 'generic',
-		'platformthemes'
-	):
-		p = join(qt_plugins, unused_plugin)
-		if os.path.isdir(p):
-			rmtree(p)
-		elif os.path.isfile(p):
-			remove(p)
-
 @command
 def sign():
 	app_dir = path('${freeze_dir}')
 	sparkle_dir = join(app_dir, 'Contents/Frameworks/Sparkle.framework')
-	# Avoid some Notarization warnings by signing not just the app_dir, but some
-	# sub-directories as well:
+	# Sign inside-out to avoid notarization warnings about nested binaries:
 	for binary_path in (
 		join(sparkle_dir, 'Versions/A/Resources/Autoupdate.app'),
 		sparkle_dir,
@@ -130,61 +92,63 @@ def sign():
 		)
 	zip_path = path('${freeze_dir}') + '.zip'
 	_zip_mac(app_dir, zip_path)
-	_notarize(zip_path)
+	try:
+		_notarize(zip_path)
+	finally:
+		if os.path.exists(zip_path):
+			remove(zip_path)
 	_staple(app_dir)
+
+def _codesign_identity():
+	identity = os.environ.get('MAC_CODESIGN_IDENTITY', '').strip()
+	if not identity:
+		raise RuntimeError(
+			'MAC_CODESIGN_IDENTITY env var is required for signing. '
+			'Set it to your Developer ID Application identity '
+			"(e.g. 'Developer ID Application: Jane Doe (TEAMID)')."
+		)
+	return identity
 
 def _run_codesign(*args):
 	run([
-		'codesign', '--verbose',
-		'-s', 'Developer ID Application: Michael Herrmann',
+		'codesign', '--verbose', '--timestamp',
+		'-s', _codesign_identity(),
 	] + list(args), check=True)
 
 def _staple(file_path):
 	run(['xcrun', 'stapler', 'staple', file_path], check=True)
 
-def _notarize(file_path, query_interval_secs=10):
-	response = _run_altool([
-		'--notarize-app', '-t', 'osx', '-f', file_path,
-		'--primary-bundle-id', SETTINGS['mac_bundle_identifier']
-	])
-	request_uuid = response['notarization-upload']['RequestUUID']
-	while True:
-		sleep(query_interval_secs)
-		try:
-			response = _run_altool(['--notarization-info', request_uuid])
-		except CalledProcessError as e:
-			stdout = e.stdout.decode('utf-8')
-			if 'Could not find the RequestUUID' not in stdout:
-				raise
-		else:
-			status = response['notarization-info']['Status']
-			if status != 'in progress':
-				break
-		print('Waiting for notarization to complete...')
-	log_url = response['notarization-info']['LogFileURL']
-	log_response = requests.get(log_url)
-	log_response.raise_for_status()
-	log_json = log_response.json()
-	issues = log_json.get('issues', [])
-	if issues:
-		print('Notarization encountered some issues:')
-		print(json.dumps(issues, indent=4, sort_keys=True))
-	if status != 'success':
-		raise RuntimeError('Unexpected notarization status: %r' % status)
+def _notarize(file_path):
+	"""Submit ``file_path`` (a .zip or .dmg) to Apple's notary service.
 
-def _run_altool(args):
-	user = os.environ.get(
-		'FMAN_APPLE_DEVELOPER_USER', SETTINGS.get('apple_developer_user', '')
-	)
-	pw = os.environ.get(
-		'FMAN_APPLE_DEVELOPER_APP_PW', SETTINGS.get('apple_developer_app_pw', '')
-	)
-	all_args = [
-		'xcrun', 'altool', '--output-format', 'xml',
-		'-u', user, '-p', pw
-	] + args
-	process = run(all_args, stdout=PIPE, stderr=PIPE, check=True)
-	return plistlib.loads(process.stdout)
+	Uses ``notarytool`` with a pre-configured keychain profile (set up by
+	``xcrun notarytool store-credentials``) so the Apple ID password never
+	appears on the command line. ``altool``'s notarization service was
+	retired by Apple in November 2023.
+
+	Env:
+	    NOTARYTOOL_PROFILE: keychain profile name (required).
+	    NOTARYTOOL_KEYCHAIN: keychain path; if unset, the default login
+	        keychain is used (matches local-dev expectations).
+	"""
+	profile = _require_env('NOTARYTOOL_PROFILE')
+	args = [
+		'xcrun', 'notarytool', 'submit', file_path,
+		'--keychain-profile', profile,
+		'--wait',
+	]
+	keychain = os.environ.get('NOTARYTOOL_KEYCHAIN', '').strip()
+	if keychain:
+		args += ['--keychain', keychain]
+	run(args, check=True)
+
+def _require_env(name):
+	value = os.environ.get(name, '').strip()
+	if not value:
+		raise RuntimeError(
+			f'{name} env var is required for notarization.'
+		)
+	return value
 
 @command
 def sign_installer():

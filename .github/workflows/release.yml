@@ -58,16 +58,107 @@ jobs:
         env:
           VERSION: ${{ steps.tag.outputs.version }}
 
+      - name: Check signing config
+        id: signing_config
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE_P12" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Apple signing secrets present — release will be signed and notarized."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple signing secrets not configured — releasing ad-hoc signed build (users will see Gatekeeper warnings)."
+          fi
+
+      - name: Set up signing keychain
+        id: signing
+        if: steps.signing_config.outputs.configured == 'true'
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PW=$(openssl rand -base64 32)
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          PROFILE="vitraj-notary"
+
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
+          # Prepend our keychain to the search list so codesign finds the cert.
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '" ')
+          rm -f "$CERT_PATH"
+
+          # Store notarization credentials in the keychain so notarytool can
+          # reference them by profile name. This keeps the app-specific
+          # password off subsequent process command lines.
+          xcrun notarytool store-credentials "$PROFILE" \
+            --keychain "$KEYCHAIN" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" >/dev/null
+
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" \
+            | awk -F'"' '/Developer ID Application/ { print $2; exit }')
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Developer ID Application identity found in keychain"
+            exit 1
+          fi
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+          echo "keychain=$KEYCHAIN" >> "$GITHUB_OUTPUT"
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "Found signing identity: $IDENTITY"
+
       - name: Freeze app
         run: python build.py freeze
 
+      - name: Sign and notarize app
+        if: ${{ steps.signing.outputs.identity != '' }}
+        env:
+          MAC_CODESIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          NOTARYTOOL_PROFILE: ${{ steps.signing.outputs.profile }}
+          NOTARYTOOL_KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+        run: python build.py sign
+
       - name: Build DMG
         run: python src/build/create_dmg.py
+
+      - name: Sign and notarize DMG
+        if: ${{ steps.signing.outputs.identity != '' }}
+        env:
+          MAC_CODESIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          NOTARYTOOL_PROFILE: ${{ steps.signing.outputs.profile }}
+          NOTARYTOOL_KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+        run: python build.py sign_installer
 
       - name: Verify DMG
         run: |
           test -f target/vitraj.dmg
           ls -lh target/vitraj.dmg
+
+      - name: Tear down signing keychain
+        if: always() && steps.signing.outputs.keychain != ''
+        env:
+          KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+        run: |
+          # Remove our keychain from the user search list, then delete it.
+          # `|| true` so cleanup never masks an earlier failure.
+          REMAINING=$(security list-keychains -d user | tr -d '" ' \
+            | grep -vF "$KEYCHAIN" || true)
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s $REMAINING || true
+          security delete-keychain "$KEYCHAIN" || true
 
       - name: Create GitHub Release
         env:
