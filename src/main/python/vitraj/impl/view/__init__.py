@@ -1,6 +1,7 @@
 from fbs_runtime.platform import is_mac
 from vitraj.impl.util.qt import WA_MacShowFocusRect, Key_Home, Key_End, \
 	ShiftModifier, Key_Return, Key_Enter, ToolTipRole, connect_once
+from vitraj.impl.view.context_menu import ContextMenuMixin
 from vitraj.impl.view.drag_and_drop import DragAndDrop
 from vitraj.impl.view.move_without_updating_selection import \
 	MoveWithoutUpdatingSelection
@@ -8,18 +9,16 @@ from vitraj.impl.view.resize_cols_to_contents import ResizeColumnsToContents
 from vitraj.impl.view.single_row_mode import SingleRowMode
 from PyQt5.QtCore import QEvent, QItemSelectionModel as QISM, QRect, Qt, \
 	pyqtSignal, QRectF
-from PyQt5.QtGui import QPen, QContextMenuEvent, QKeySequence, QPainterPath, \
-	QRegion
-from PyQt5.QtWidgets import QTableView, QLineEdit, QVBoxLayout, QStyle, \
-	QStyledItemDelegate, QProxyStyle, QHeaderView, QToolTip, QMenu, QAction
+from PyQt5.QtGui import QPen, QContextMenuEvent, QPainterPath, QRegion
+from PyQt5.QtWidgets import QTableView, QLineEdit, QStyle, \
+	QStyledItemDelegate, QProxyStyle, QHeaderView, QToolTip, QMenu
 
 class FileListView(
-	SingleRowMode, MoveWithoutUpdatingSelection, DragAndDrop,
-	ResizeColumnsToContents
+	ContextMenuMixin, SingleRowMode, MoveWithoutUpdatingSelection,
+	DragAndDrop, ResizeColumnsToContents
 ):
 	def __init__(self, parent, get_context_menu):
-		super().__init__(parent)
-		self._get_context_menu = get_context_menu
+		super().__init__(parent, get_context_menu=get_context_menu)
 		self.key_press_event_filter = lambda event: False
 		self.setShowGrid(False)
 		self.setSortingEnabled(True)
@@ -37,60 +36,13 @@ class FileListView(
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 		self.setContextMenuPolicy(Qt.DefaultContextMenu)
 		self._urls_being_loaded = []
-	def contextMenuEvent(self, event):
-		index = self.indexAt(event.pos())
-		updated_selection = False
-		if index.isValid():
-			file_under_mouse = self.model().url(index)
-			if event.reason() == QContextMenuEvent.Mouse:
-				# Our context menu implementation simply calls plugin commands.
-				# Many commands act on the selected files, or the file under the
-				# cursor if no file is selected. This lets the user press Insert
-				# to select files and move the cursor down, then perform actions
-				# on the selected files above - and not(!) the file under the
-				# cursor.
-				# Consider what happens in the above scenario when the user
-				# launches the context menu on the file under the cursor with
-				# the mouse. The expectation would be for this to act on the
-				# file under the cursor (because it was just selected with the
-				# mouse). But without special treatment of this case, our
-				# implementation would call the command on the selected files,
-				# as if it had been invoked via the keyboard.
-				# To solve this, we reset the selection to the file that was
-				# clicked on when the user opens the context menu by mouse. This
-				# way, the command sees (and naturally acts on) the correct
-				# "selected" file. This behaviour exactly mimics that of Total
-				# Commander.
-				model = self.selectionModel()
-				if not model.isSelected(index):
-					model.select(index, QISM.ClearAndSelect | QISM.Rows)
-					updated_selection = True
-		else:
-			file_under_mouse = None
-		try:
-			menu = Menu(self)
-			entries = self._get_context_menu(event, file_under_mouse)
-			if not entries:
-				return
-			for caption, shortcut, callback in entries:
-				if caption == '-':
-					menu.addSeparator()
-				else:
-					action = QAction(caption, self)
-					# Need `c=callback` to create one lambda per loop:
-					action.triggered.connect(lambda _, c=callback: c())
-					if shortcut:
-						action.setShortcut(QKeySequence(shortcut))
-					menu.addAction(action)
-			pos = event.globalPos()
-			if event.reason() != QContextMenuEvent.Mouse:
-				# For some reason, event.globalPos() does not take the header into
-				# account when not caused by mouse. Correct for this:
-				pos.setY(pos.y() + self.horizontalHeader().height())
-			menu.exec(pos)
-		finally:
-			if updated_selection:
-				self.clearSelection()
+	def _context_menu_position(self, event):
+		pos = event.globalPos()
+		if event.reason() != QContextMenuEvent.Mouse:
+			# event.globalPos() does not take the header into account when not
+			# caused by mouse. Correct for this:
+			pos.setY(pos.y() + self.horizontalHeader().height())
+		return pos
 	def toggle_selection(self, file_url):
 		self._change_selection(file_url, QISM.Toggle)
 	def select(self, file_urls, ignore_errors=False):
@@ -302,14 +254,6 @@ class FileListItemDelegate(QStyledItemDelegate):
 		result = super().createEditor(parent, option, index)
 		result.setObjectName('editor')
 		return result
-
-class Layout(QVBoxLayout):
-	def __init__(self, path_view, file_view):
-		super().__init__()
-		self.addWidget(path_view)
-		self.addWidget(file_view)
-		self.setContentsMargins(0, 0, 0, 0)
-		self.setSpacing(0)
 
 class ProxyStyle(QProxyStyle):
 	def drawPrimitive(self, element, option, painter, widget):

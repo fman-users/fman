@@ -85,7 +85,7 @@ class ToggleGalleryView(DirectoryPaneCommand):
 	aliases = ('Toggle Gallery View',)
 
 	def __call__(self):
-		self.pane._widget.toggle_view_mode()
+		self.pane.toggle_view_mode()
 
 class ToggleSelection(DirectoryPaneCommand):
 	def __call__(self):

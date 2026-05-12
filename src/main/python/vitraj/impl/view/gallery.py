@@ -6,20 +6,14 @@ top so they can be unit-tested without spinning up a QApplication.
 
 import os
 
-from fbs_runtime.platform import is_linux, is_mac, is_windows
-from PyQt5.QtCore import (
-	QItemSelectionModel as QISM, QRect, QRectF, QSize, Qt, pyqtSignal
-)
+from PyQt5.QtCore import QRect, QRectF, QSize, Qt, pyqtSignal
 from PyQt5.QtGui import (
-	QColor, QContextMenuEvent, QFontMetrics, QKeySequence, QPainter,
-	QPainterPath, QPen
+	QColor, QFontMetrics, QPainter, QPainterPath, QPen
 )
-from PyQt5.QtWidgets import (
-	QAbstractItemView, QAction, QListView, QStyle, QStyledItemDelegate
-)
+from PyQt5.QtWidgets import QListView, QStyle, QStyledItemDelegate
 
-from vitraj.impl.util.qt import AltModifier, ControlModifier, CopyAction, \
-	MoveAction, NoButton
+from vitraj.impl.view.context_menu import ContextMenuMixin
+from vitraj.impl.view.drag_and_drop import DragAndDrop
 from vitraj.impl.view.thumbnails import format_human_size
 from vitraj.url import as_human_readable, splitscheme
 
@@ -113,7 +107,7 @@ def _local_path(url):
 	return as_human_readable(url)
 
 
-class GalleryView(QListView):
+class GalleryView(ContextMenuMixin, DragAndDrop, QListView):
 	"""Grid/icon view for `DirectoryPaneWidget`.
 
 	Shares the model and selection-model with the pane's `FileListView`.
@@ -121,14 +115,8 @@ class GalleryView(QListView):
 
 	tile_size_changed = pyqtSignal(int)   # new tile size in px
 
-	_IDLE_STATES = (
-		QAbstractItemView.NoState, QAbstractItemView.AnimatingState
-	)
-
-	def __init__(self, parent=None):
-		super().__init__(parent)
-		self._get_context_menu = None
-		self._dragged_index = None
+	def __init__(self, parent=None, get_context_menu=None):
+		super().__init__(parent, get_context_menu=get_context_menu)
 		self.setViewMode(QListView.IconMode)
 		self.setMovement(QListView.Static)
 		self.setResizeMode(QListView.Adjust)
@@ -139,12 +127,8 @@ class GalleryView(QListView):
 		self.setSelectionMode(QListView.ExtendedSelection)
 		self.setEditTriggers(QListView.NoEditTriggers)
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-		self.setDragEnabled(True)
-		self.setAcceptDrops(True)
-		self.setDragDropMode(QListView.DragDrop)
-		self.setDefaultDropAction(MoveAction)
-		self.setDropIndicatorShown(True)
-		self.setDragDropOverwriteMode(True)
+		# setMovement(Static) clobbered the drag flags — re-apply.
+		self._install_drag_and_drop()
 		# The owning DirectoryPaneWidget overrides this with a controller hook
 		# so plugin shortcuts (e.g. Ctrl+G to leave gallery mode) keep working.
 		self.key_press_event_filter = lambda event: False
@@ -186,98 +170,6 @@ class GalleryView(QListView):
 				event.accept()
 				return
 		super().keyPressEvent(event)
-
-	def contextMenuEvent(self, event):
-		if self._get_context_menu is None:
-			return
-		# Lazy import: ``fman.impl.view`` indirectly imports this module via
-		# widgets.py during app startup.
-		from vitraj.impl.view import Menu
-		index = self.indexAt(event.pos())
-		updated_selection = False
-		if index.isValid():
-			file_under_mouse = self.model().url(index)
-			if event.reason() == QContextMenuEvent.Mouse:
-				selection_model = self.selectionModel()
-				if not selection_model.isSelected(index):
-					selection_model.select(
-						index, QISM.ClearAndSelect | QISM.Rows
-					)
-					updated_selection = True
-		else:
-			file_under_mouse = None
-		try:
-			menu = Menu(self)
-			entries = self._get_context_menu(event, file_under_mouse)
-			if not entries:
-				return
-			for caption, shortcut, callback in entries:
-				if caption == '-':
-					menu.addSeparator()
-				else:
-					action = QAction(caption, self)
-					# c=callback binds per-iteration so each lambda closes
-					# over its own callback.
-					action.triggered.connect(lambda _, c=callback: c())
-					if shortcut:
-						action.setShortcut(QKeySequence(shortcut))
-					menu.addAction(action)
-			menu.exec(event.globalPos())
-		finally:
-			if updated_selection:
-				self.clearSelection()
-
-	def mouseMoveEvent(self, event):
-		if event.buttons() != NoButton and self.state() in self._IDLE_STATES:
-			self._dragged_index = self.indexAt(event.pos())
-			if self._dragged_index.isValid():
-				# Qt only starts a drag when items are selected. We also want
-				# to drag the focus item when no selection exists.
-				self.setState(self.DraggingState)
-				return
-		else:
-			super().mouseMoveEvent(event)
-
-	def startDrag(self, supportedActions):
-		if not self._dragged_index or not self._dragged_index.isValid():
-			return
-		if self._dragged_index in self.selectedIndexes():
-			super().startDrag(supportedActions)
-		else:
-			# Qt only drags the current selection. Temporarily "select" the
-			# dragged row (and restore afterwards) so the standard machinery
-			# picks it up.
-			selection = self.selectionModel().selection()
-			current = self.selectionModel().currentIndex()
-			try:
-				self.selectionModel().clear()
-				self.setCurrentIndex(self._dragged_index)
-				self.selectionModel().select(
-					self._dragged_index, QISM.ClearAndSelect | QISM.Rows
-				)
-				super().startDrag(supportedActions)
-			finally:
-				self.selectionModel().select(selection, QISM.ClearAndSelect)
-				self.selectionModel().setCurrentIndex(current, QISM.NoUpdate)
-
-	def dropEvent(self, event):
-		modifiers = event.keyboardModifiers()
-		if is_mac():
-			do_copy = modifiers & AltModifier
-		elif is_linux():
-			do_copy = (
-				(modifiers & ControlModifier) or (modifiers & AltModifier)
-			)
-		else:
-			do_copy = modifiers & ControlModifier
-		action = CopyAction if do_copy else MoveAction
-		event.setDropAction(action)
-		super().dropEvent(event)
-		if action == MoveAction and is_windows():
-			# Accepting the event on Windows moves the file to the Recycle
-			# Bin (super().dropEvent did the actual move already).
-			event.ignore()
-
 
 _OVERLAY_BG = QColor(20, 20, 28, int(0.55 * 255))
 _OVERLAY_STROKE = QColor(255, 255, 255, int(0.18 * 255))

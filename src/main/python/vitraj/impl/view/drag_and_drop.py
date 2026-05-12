@@ -2,17 +2,34 @@ from fbs_runtime.platform import is_mac, is_windows, is_linux
 from vitraj.impl.util.qt import MoveAction, NoButton, AltModifier, \
 	ControlModifier, CopyAction
 from PyQt5.QtCore import QItemSelectionModel as QISM
-from PyQt5.QtWidgets import QTableView, QAbstractItemView
+from PyQt5.QtWidgets import QAbstractItemView
 
-class DragAndDrop(QTableView):
+class DragAndDrop:
+	"""Mixin for any ``QAbstractItemView`` subclass (``QTableView``,
+	``QListView``, …) that wants Total-Commander-style drag and drop:
+
+	- a drag can start from the *focus* item even when nothing is selected,
+	- the drop action follows the platform's copy/move modifier convention.
+
+	Pure-Python mixin (no Qt base class) so it can be paired with different
+	concrete views without producing a C++ diamond — PyQt5 binds one Qt
+	parent per Python class, so the Qt base must come from the *other* side
+	of the inheritance. Mix BEFORE the view base class so ``super().__init__``
+	chains through the mixin into the view.
+	"""
 
 	_IDLE_STATES = (QAbstractItemView.NoState, QAbstractItemView.AnimatingState)
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self._dragged_index = None
+		self._install_drag_and_drop()
+	def _install_drag_and_drop(self):
+		# Some Qt setters (notably ``QListView.setMovement``) clobber
+		# ``dragEnabled`` / ``dragDropMode``. Subclasses that call such setters
+		# after ``__init__`` can re-apply our defaults by calling this method.
 		self.setDragEnabled(True)
-		self.setDragDropMode(self.DragDrop)
+		self.setDragDropMode(QAbstractItemView.DragDrop)
 		self.setDefaultDropAction(MoveAction)
 		self.setDropIndicatorShown(True)
 		self.setAcceptDrops(True)
