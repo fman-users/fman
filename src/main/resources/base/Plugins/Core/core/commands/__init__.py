@@ -85,10 +85,7 @@ class ToggleGalleryView(DirectoryPaneCommand):
 	aliases = ('Toggle Gallery View',)
 
 	def __call__(self):
-		widget = self.pane._widget
-		current = widget.get_view_mode()
-		new_mode = 'gallery' if current == 'list' else 'list'
-		widget.set_view_mode(new_mode)
+		self.pane._widget.toggle_view_mode()
 
 class ToggleSelection(DirectoryPaneCommand):
 	def __call__(self):

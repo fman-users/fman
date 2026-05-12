@@ -1,5 +1,13 @@
 """Persistent thumbnail cache and metadata helpers for the gallery view."""
 
+import hashlib
+import os
+from collections import OrderedDict
+
+from PyQt5.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, pyqtSignal
+from PyQt5.QtGui import QImageReader, QPixmap
+
+
 _UNITS = ('B', 'KB', 'MB', 'GB', 'TB')
 
 
@@ -12,11 +20,8 @@ def format_human_size(num_bytes):
 				return '%d B' % int(size)
 			return '%.1f %s' % (size, unit)
 		size /= 1024
-	# Unreachable, but keeps linters happy.
 	return '%.1f %s' % (size, _UNITS[-1])
 
-
-import hashlib
 
 # Thumbnails are generated at one of these pixel sizes; tiles downscale
 # the nearest-larger bucket at paint time. This keeps the on-disk cache
@@ -41,9 +46,21 @@ def pick_size_bucket(requested_px):
 	return SIZE_BUCKETS[-1]
 
 
-import os
-from PyQt5.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal, Qt, QSize
-from PyQt5.QtGui import QImageReader, QPixmap
+# Bound the in-memory caches. 512 pixmaps at 256×256 RGBA8 ≈ 130 MB worst case;
+# a typical gallery viewport holds 30-60 tiles, so this leaves comfortable
+# headroom for scrolling without unbounded growth.
+_MAX_PIXMAPS = 512
+_MAX_RESOLUTIONS = 4096
+_MAX_FAILED = 4096
+
+
+def _lru_set(od, key, value, cap):
+	"""Insert ``key -> value`` into ``od`` (an OrderedDict) with LRU eviction."""
+	if key in od:
+		od.move_to_end(key)
+	od[key] = value
+	while len(od) > cap:
+		od.popitem(last=False)
 
 
 class _GeneratorSignals(QObject):
@@ -61,16 +78,20 @@ class _Generator(QRunnable):
 	def run(self):
 		reader = QImageReader(self._source_path)
 		reader.setAutoTransform(True)
+		# Decode-and-scale in one pass: JPEG IDCT stops at the right level
+		# and PNG/TIFF use less RAM than a full-res decode + downscale.
+		original = reader.size()
+		if original.isValid() and not original.isEmpty():
+			target = original.scaled(
+				QSize(self._size_bucket, self._size_bucket),
+				Qt.KeepAspectRatio,
+			)
+			reader.setScaledSize(target)
 		image = reader.read()
 		if image.isNull():
 			self._signals.done.emit(self._key, None)
 			return
-		scaled = image.scaled(
-			QSize(self._size_bucket, self._size_bucket),
-			Qt.KeepAspectRatio,
-			Qt.SmoothTransformation
-		)
-		self._signals.done.emit(self._key, scaled)
+		self._signals.done.emit(self._key, image)
 
 
 class ThumbnailCache(QObject):
@@ -81,7 +102,9 @@ class ThumbnailCache(QObject):
 	is cached in memory keyed by ``(path, mtime_ns)``.
 	"""
 
-	thumbnail_ready = pyqtSignal(str)   # absolute source path
+	# Emits the absolute source path of the thumbnail that just became
+	# available. The view uses this to repaint only the affected tile.
+	thumbnail_ready = pyqtSignal(str)
 
 	def __init__(self, cache_dir, parent=None):
 		super().__init__(parent)
@@ -89,46 +112,44 @@ class ThumbnailCache(QObject):
 		os.makedirs(self._cache_dir, exist_ok=True)
 		for bucket in SIZE_BUCKETS:
 			os.makedirs(os.path.join(self._cache_dir, str(bucket)), exist_ok=True)
-		self._mem_pixmaps = {}           # key -> QPixmap
-		self._resolutions = {}           # (path, mtime_ns) -> QSize
-		self._pending = set()            # set of keys currently generating
-		# Keys whose generator emitted (key, None). Tracked so we don't
-		# re-schedule generation on every paint event for unreadable
-		# images, which would otherwise cause a runaway loop because
-		# `thumbnail_ready` triggers a full viewport repaint.
-		self._failed = set()
+		self._mem_pixmaps = OrderedDict()    # key -> QPixmap (LRU)
+		self._stats = OrderedDict()          # path -> (mtime_ns, size_bytes)
+		self._resolutions = OrderedDict()    # (path, mtime_ns) -> QSize
+		self._pending = set()                # keys currently generating
+		# Keys whose generator emitted (key, None). Without this, paint
+		# events would re-schedule generation forever for unreadable images.
+		self._failed = OrderedDict()
 		self._signals = _GeneratorSignals()
 		self._signals.done.connect(self._on_generated)
 		self._pool = QThreadPool.globalInstance()
-		# Path -> cache_key, used so the view can find the key to lookup
-		# when `thumbnail_ready` fires.
-		self._key_for = {}
+		self._key_for = {}   # key -> (path, mtime_ns, bucket); cleared on emit
 
 	# ------------------------------------------------------------------ public
 	def get(self, absolute_path, requested_px):
 		"""Return a ``QPixmap`` if the thumbnail is cached, else ``None``."""
-		try:
-			mtime_ns = os.stat(absolute_path).st_mtime_ns
-		except OSError:
+		stat = self._stat(absolute_path)
+		if stat is None:
 			return None
+		mtime_ns, _ = stat
 		bucket = pick_size_bucket(requested_px)
 		key = cache_key(absolute_path, mtime_ns, bucket)
-		if key in self._mem_pixmaps:
-			return self._mem_pixmaps[key]
+		pix = self._mem_pixmaps.get(key)
+		if pix is not None:
+			self._mem_pixmaps.move_to_end(key)
+			return pix
 		disk = self._disk_path(absolute_path, mtime_ns, bucket)
-		if os.path.exists(disk):
-			pix = QPixmap(disk)
-			if not pix.isNull():
-				self._mem_pixmaps[key] = pix
-				return pix
+		pix = QPixmap(disk)
+		if not pix.isNull():
+			_lru_set(self._mem_pixmaps, key, pix, _MAX_PIXMAPS)
+			return pix
 		return None
 
 	def request(self, absolute_path, requested_px):
 		"""Schedule async thumbnail generation. Emits ``thumbnail_ready``."""
-		try:
-			mtime_ns = os.stat(absolute_path).st_mtime_ns
-		except OSError:
+		stat = self._stat(absolute_path)
+		if stat is None:
 			return
+		mtime_ns, _ = stat
 		bucket = pick_size_bucket(requested_px)
 		key = cache_key(absolute_path, mtime_ns, bucket)
 		if (
@@ -143,20 +164,43 @@ class ThumbnailCache(QObject):
 
 	def get_resolution(self, absolute_path):
 		"""Return ``QSize(w, h)`` for an image, or ``None`` if unreadable."""
-		try:
-			mtime_ns = os.stat(absolute_path).st_mtime_ns
-		except OSError:
+		stat = self._stat(absolute_path)
+		if stat is None:
 			return None
+		mtime_ns, _ = stat
 		cache_k = (absolute_path, mtime_ns)
-		if cache_k in self._resolutions:
-			return self._resolutions[cache_k]
+		cached = self._resolutions.get(cache_k)
+		if cached is not None:
+			self._resolutions.move_to_end(cache_k)
+			return cached
 		size = QImageReader(absolute_path).size()
 		if not size.isValid():
 			return None
-		self._resolutions[cache_k] = size
+		_lru_set(self._resolutions, cache_k, size, _MAX_RESOLUTIONS)
 		return size
 
+	def get_size_bytes(self, absolute_path):
+		"""Return the file size in bytes, or ``None`` if unreadable."""
+		stat = self._stat(absolute_path)
+		if stat is None:
+			return None
+		return stat[1]
+
 	# ----------------------------------------------------------------- private
+	def _stat(self, absolute_path):
+		try:
+			st = os.stat(absolute_path)
+		except OSError:
+			return None
+		mtime_ns = st.st_mtime_ns
+		cached = self._stats.get(absolute_path)
+		if cached is not None and cached[0] == mtime_ns:
+			self._stats.move_to_end(absolute_path)
+			return cached
+		entry = (mtime_ns, st.st_size)
+		_lru_set(self._stats, absolute_path, entry, _MAX_RESOLUTIONS)
+		return entry
+
 	def _disk_path(self, absolute_path, mtime_ns, size_bucket):
 		key = cache_key(absolute_path, mtime_ns, size_bucket)
 		return os.path.join(self._cache_dir, str(size_bucket), key + '.png')
@@ -167,14 +211,14 @@ class ThumbnailCache(QObject):
 			# Remember the failure so future request(...) calls don't
 			# re-schedule generation, and drop the lookup entry to avoid
 			# a memory leak per failed image.
-			self._failed.add(key)
+			_lru_set(self._failed, key, True, _MAX_FAILED)
 			self._key_for.pop(key, None)
 			return
 		path, mtime_ns, bucket = self._key_for.pop(key, (None, None, None))
 		if path is None:
 			return
 		pix = QPixmap.fromImage(image)
-		self._mem_pixmaps[key] = pix
+		_lru_set(self._mem_pixmaps, key, pix, _MAX_PIXMAPS)
 		try:
 			image.save(self._disk_path(path, mtime_ns, bucket), 'PNG')
 		except OSError:

@@ -38,6 +38,10 @@ class _GalleryWidgetMixin:
 		if mode not in ('list', 'gallery'):
 			raise ValueError('Unknown view mode: %r' % mode)
 		self._view_mode = mode
+	def toggle_view_mode(self):
+		self.set_view_mode(
+			'list' if self._view_mode == 'gallery' else 'gallery'
+		)
 	def get_gallery_tile_size(self):
 		return self._gallery_tile_size
 	def set_gallery_tile_size(self, px):

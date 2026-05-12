@@ -2,6 +2,7 @@ from base64 import b64encode, b64decode
 from concurrent.futures import ThreadPoolExecutor
 from fman.impl.util.path import make_absolute
 from fman.impl.util.url import get_existing_pardir
+from fman.impl.widgets import VIEW_MODES
 from fman.url import as_url, dirname, as_human_readable
 from os import getcwd
 from os.path import expanduser
@@ -154,10 +155,10 @@ class SessionManager:
 				pane._widget.set_gallery_tile_size(int(gallery_tile_size))
 			except (ValueError, TypeError):
 				pass
-		if view_mode in ('list', 'gallery'):
+		if view_mode in VIEW_MODES:
 			try:
 				pane._widget.set_view_mode(view_mode)
-			except (ValueError, AttributeError):
+			except ValueError:
 				pass
 	def _exists_and_is_dir(self, url):
 		try:

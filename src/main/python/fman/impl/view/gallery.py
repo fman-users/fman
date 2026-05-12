@@ -4,10 +4,30 @@ The Qt widget classes are defined at the bottom. Pure helpers live at the
 top so they can be unit-tested without spinning up a QApplication.
 """
 
-ELLIPSIS = '…'  # "…"
+import os
 
-# Filename truncation anchors (see design spec, section "Filename truncation"):
-#   first 3 chars are sacred; last 5 are preferred but droppable.
+from fbs_runtime.platform import is_linux, is_mac, is_windows
+from PyQt5.QtCore import (
+	QItemSelectionModel as QISM, QRect, QRectF, QSize, Qt, pyqtSignal
+)
+from PyQt5.QtGui import (
+	QColor, QContextMenuEvent, QFontMetrics, QKeySequence, QPainter,
+	QPainterPath, QPen
+)
+from PyQt5.QtWidgets import (
+	QAbstractItemView, QAction, QListView, QStyle, QStyledItemDelegate
+)
+
+from fman.impl.util.qt import AltModifier, ControlModifier, CopyAction, \
+	MoveAction, NoButton
+from fman.impl.view.thumbnails import format_human_size
+from fman.url import as_human_readable, splitscheme
+
+
+ELLIPSIS = '…'
+
+# Filename truncation: first 3 chars are sacred; last 5 are preferred but
+# droppable when the budget can't fit ``first3 + … + last5``.
 _FIRST_N = 3
 _LAST_N = 5
 
@@ -32,7 +52,7 @@ def truncate_filename(name, max_chars):
 		return full
 	return first + ELLIPSIS
 
-# Overlay layout (see design spec, section "Overlay layouts").
+
 SPREAD = 'spread'
 STACKED = 'stacked'
 STACK_BREAKPOINT_PX = 140
@@ -50,14 +70,6 @@ def pick_overlay_layout(tile_width_px):
 	return STACKED
 
 
-from fbs_runtime.platform import is_mac, is_windows, is_linux
-from fman.impl.util.qt import AltModifier, ControlModifier, CopyAction, \
-	MoveAction, NoButton
-from PyQt5.QtCore import QItemSelectionModel as QISM, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QContextMenuEvent, QKeySequence
-from PyQt5.QtWidgets import QAbstractItemView, QAction, QListView
-
-
 DEFAULT_TILE_SIZE_PX = 160
 MIN_TILE_SIZE_PX = 80
 MAX_TILE_SIZE_PX = 400
@@ -68,6 +80,38 @@ _LABEL_AREA_PX = 28
 # Horizontal padding around the tile contents.
 _TILE_PADDING_PX = 12
 
+_IMAGE_EXTS = frozenset({
+	'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'heic',
+	'heif', 'avif', 'svg',
+})
+
+
+def _ext_lower(path):
+	"""Return the extension of ``path`` lowercased and without the dot, or ``''``."""
+	if not path:
+		return ''
+	return os.path.splitext(path)[1][1:].lower()
+
+
+def _is_image_path(path):
+	return _ext_lower(path) in _IMAGE_EXTS
+
+
+def _strip_ext(name):
+	if not name:
+		return ''
+	root, _ = os.path.splitext(name)
+	return root or name
+
+
+def _local_path(url):
+	if not url:
+		return None
+	scheme, _ = splitscheme(url)
+	if scheme != 'file://':
+		return None
+	return as_human_readable(url)
+
 
 class GalleryView(QListView):
 	"""Grid/icon view for `DirectoryPaneWidget`.
@@ -77,20 +121,13 @@ class GalleryView(QListView):
 
 	tile_size_changed = pyqtSignal(int)   # new tile size in px
 
-	# Drag/drop "idle" states. Same definition the ``DragAndDrop`` mixin
-	# uses for ``FileListView`` -- duplicated here to keep ``GalleryView``
-	# self-contained while we don't yet share a common base.
 	_IDLE_STATES = (
 		QAbstractItemView.NoState, QAbstractItemView.AnimatingState
 	)
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		# Populated by the owning ``DirectoryPaneWidget``. Mirrors
-		# ``FileListView._get_context_menu`` -- a callable returning the
-		# list of ``(caption, shortcut, callback)`` tuples to display.
 		self._get_context_menu = None
-		# Bookkeeping for drag-out (see mouseMoveEvent / startDrag below).
 		self._dragged_index = None
 		self.setViewMode(QListView.IconMode)
 		self.setMovement(QListView.Static)
@@ -102,66 +139,46 @@ class GalleryView(QListView):
 		self.setSelectionMode(QListView.ExtendedSelection)
 		self.setEditTriggers(QListView.NoEditTriggers)
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-		# Drag/drop: mirror the configuration of the ``DragAndDrop`` mixin
-		# used by ``FileListView``. The model implements ``mimeData`` and
-		# ``dropMimeData`` (see ``fman.impl.model.drag_and_drop``) so Qt
-		# handles the data transfer; we only need to set the right modes
-		# and pick the action (move/copy) in ``dropEvent`` below.
 		self.setDragEnabled(True)
 		self.setAcceptDrops(True)
 		self.setDragDropMode(QListView.DragDrop)
 		self.setDefaultDropAction(MoveAction)
 		self.setDropIndicatorShown(True)
 		self.setDragDropOverwriteMode(True)
-		# Mirrors `FileListView.key_press_event_filter`: the owning
-		# `DirectoryPaneWidget` wires this to its `_on_key_pressed`, which
-		# routes the keypress through the controller (filter bar, plugin
-		# shortcuts, etc.). Without this hook, the user would be stuck in
-		# gallery mode because `Ctrl+G` (and every other plugin shortcut)
-		# would never reach `controller.handle_shortcut(...)`.
+		# The owning DirectoryPaneWidget overrides this with a controller hook
+		# so plugin shortcuts (e.g. Ctrl+G to leave gallery mode) keep working.
 		self.key_press_event_filter = lambda event: False
-		self._tile_size = DEFAULT_TILE_SIZE_PX
-		self._apply_tile_size()
+		self._apply_tile_size(DEFAULT_TILE_SIZE_PX)
 
 	def set_tile_size(self, px):
 		"""Clamp `px` to [MIN, MAX] and update the icon/grid size."""
 		px = max(MIN_TILE_SIZE_PX, min(MAX_TILE_SIZE_PX, int(px)))
-		if px == self._tile_size:
+		if px == self.get_tile_size():
 			return
-		self._tile_size = px
-		self._apply_tile_size()
+		self._apply_tile_size(px)
 		self.tile_size_changed.emit(px)
 
 	def get_tile_size(self):
-		return self._tile_size
+		return self.iconSize().width() or DEFAULT_TILE_SIZE_PX
 
-	def _apply_tile_size(self):
-		icon_px = self._tile_size
-		self.setIconSize(QSize(icon_px, icon_px))
-		self.setGridSize(QSize(
-			icon_px + _TILE_PADDING_PX,
-			icon_px + _LABEL_AREA_PX
-		))
+	def _apply_tile_size(self, px):
+		self.setIconSize(QSize(px, px))
+		self.setGridSize(QSize(px + _TILE_PADDING_PX, px + _LABEL_AREA_PX))
 
 	def keyPressEvent(self, event):
-		# Give the controller (via `DirectoryPaneWidget._on_key_pressed`)
-		# first crack at the key. This is what dispatches plugin
-		# shortcuts -- crucially `Ctrl+G` (toggle_gallery_view), without
-		# which the user could not leave gallery mode.
-		# Resize keys (Ctrl/Cmd + +/-/0) are not claimed by any plugin so
-		# they still reach the branch below.
 		if self.key_press_event_filter(event):
 			return
 		mod = event.modifiers()
 		ctrl_or_cmd = bool(mod & Qt.ControlModifier) or bool(mod & Qt.MetaModifier)
 		if ctrl_or_cmd:
 			key = event.key()
+			current = self.get_tile_size()
 			if key in (Qt.Key_Plus, Qt.Key_Equal):
-				self.set_tile_size(self._tile_size + TILE_SIZE_STEP_PX)
+				self.set_tile_size(current + TILE_SIZE_STEP_PX)
 				event.accept()
 				return
 			if key == Qt.Key_Minus:
-				self.set_tile_size(self._tile_size - TILE_SIZE_STEP_PX)
+				self.set_tile_size(current - TILE_SIZE_STEP_PX)
 				event.accept()
 				return
 			if key == Qt.Key_0:
@@ -171,14 +188,10 @@ class GalleryView(QListView):
 		super().keyPressEvent(event)
 
 	def contextMenuEvent(self, event):
-		# Mirrors ``FileListView.contextMenuEvent`` adapted for QListView.
-		# See the long comment in the file-list version for the rationale
-		# behind the mouse-click selection reset.
 		if self._get_context_menu is None:
 			return
-		# Imported lazily to avoid a circular import between this module
-		# and ``fman.impl.view`` (which itself imports ``GalleryView``
-		# indirectly via widgets.py during app startup).
+		# Lazy import: ``fman.impl.view`` indirectly imports this module via
+		# widgets.py during app startup.
 		from fman.impl.view import Menu
 		index = self.indexAt(event.pos())
 		updated_selection = False
@@ -203,7 +216,8 @@ class GalleryView(QListView):
 					menu.addSeparator()
 				else:
 					action = QAction(caption, self)
-					# Need `c=callback` to create one lambda per loop:
+					# c=callback binds per-iteration so each lambda closes
+					# over its own callback.
 					action.triggered.connect(lambda _, c=callback: c())
 					if shortcut:
 						action.setShortcut(QKeySequence(shortcut))
@@ -213,22 +227,13 @@ class GalleryView(QListView):
 			if updated_selection:
 				self.clearSelection()
 
-	# ----------------------------------------------------- drag and drop
-	# The three overrides below mirror ``fman.impl.view.drag_and_drop``.
-	# That mixin extends ``QTableView`` so it can't be applied directly
-	# to a ``QListView``; the logic itself only uses ``QAbstractItemView``
-	# APIs though, so we duplicate it here verbatim (modulo class name).
-
 	def mouseMoveEvent(self, event):
 		if event.buttons() != NoButton and self.state() in self._IDLE_STATES:
 			self._dragged_index = self.indexAt(event.pos())
 			if self._dragged_index.isValid():
-				# Qt's default implementation only starts dragging when
-				# there are selected items. We also want to start
-				# dragging when there aren't (because in this case we
-				# drag the focus item):
+				# Qt only starts a drag when items are selected. We also want
+				# to drag the focus item when no selection exists.
 				self.setState(self.DraggingState)
-				# startDrag(...) below now initiates drag and drop.
 				return
 		else:
 			super().mouseMoveEvent(event)
@@ -239,11 +244,9 @@ class GalleryView(QListView):
 		if self._dragged_index in self.selectedIndexes():
 			super().startDrag(supportedActions)
 		else:
-			# The default implementation of Qt only supports dragging the
-			# currently selected item(s). We therefore briefly need to
-			# "select" the items we wish to drag. This has the
-			# (unintended) side-effect that the dragged items are also
-			# rendered as being selected.
+			# Qt only drags the current selection. Temporarily "select" the
+			# dragged row (and restore afterwards) so the standard machinery
+			# picks it up.
 			selection = self.selectionModel().selection()
 			current = self.selectionModel().currentIndex()
 			try:
@@ -266,26 +269,14 @@ class GalleryView(QListView):
 				(modifiers & ControlModifier) or (modifiers & AltModifier)
 			)
 		else:
-			# Windows
 			do_copy = modifiers & ControlModifier
 		action = CopyAction if do_copy else MoveAction
 		event.setDropAction(action)
 		super().dropEvent(event)
 		if action == MoveAction and is_windows():
-			# If we accept the event (which super().dropEvent(...) does
-			# above), then Windows moves the file to the Recycle Bin!!!
-			# Avoid this:
+			# Accepting the event on Windows moves the file to the Recycle
+			# Bin (super().dropEvent did the actual move already).
 			event.ignore()
-
-
-import os
-from PyQt5.QtCore import QRect, QRectF
-from PyQt5.QtGui import (
-	QColor, QFontMetrics, QPainter, QPainterPath, QPen
-)
-from PyQt5.QtWidgets import QStyle, QStyledItemDelegate
-
-from fman.impl.view.thumbnails import format_human_size
 
 
 _OVERLAY_BG = QColor(20, 20, 28, int(0.55 * 255))
@@ -297,39 +288,6 @@ _OVERLAY_PADDING_X = 5
 _OVERLAY_PADDING_Y = 2
 _OVERLAY_RADIUS_PX = 3
 _LABEL_GAP_PX = 4
-# Image extensions for which we paint overlays. Anything not in this set
-# is treated as a non-image (icon-only tile).
-_IMAGE_EXTS = frozenset({
-	'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'heic',
-	'heif', 'avif', 'svg',
-})
-
-
-def _is_image_path(path):
-	if not path:
-		return False
-	dot = path.rfind('.')
-	if dot < 0:
-		return False
-	return path[dot + 1:].lower() in _IMAGE_EXTS
-
-
-def _strip_ext(name):
-	if not name:
-		return ''
-	dot = name.rfind('.')
-	if dot <= 0:
-		return name
-	return name[:dot]
-
-
-def _local_path(url):
-	# Only file:// URLs have meaningful thumbnails right now.
-	if not url:
-		return None
-	if url.startswith('file://'):
-		return url[len('file://'):]
-	return None
 
 
 class GalleryItemDelegate(QStyledItemDelegate):
@@ -416,12 +374,8 @@ class GalleryItemDelegate(QStyledItemDelegate):
 		painter.restore()
 
 	def _paint_overlays(self, painter, icon_rect, path, cache):
-		ext = path.rsplit('.', 1)[-1].upper()
-		size_bytes = None
-		try:
-			size_bytes = os.stat(path).st_size
-		except OSError:
-			pass
+		ext = _ext_lower(path).upper()
+		size_bytes = cache.get_size_bytes(path)
 		size_text = format_human_size(size_bytes) if size_bytes is not None else None
 		resolution = cache.get_resolution(path)
 		res_text = '%d×%d' % (resolution.width(), resolution.height()) \
@@ -441,8 +395,8 @@ class GalleryItemDelegate(QStyledItemDelegate):
 			fm = QFontMetrics(painter.font())
 			y = icon_rect.top() + _OVERLAY_INSET_PX
 			x = icon_rect.left() + _OVERLAY_INSET_PX
-			# (text, should_elide) pairs in display order. Only the
-			# resolution row elides — extension and size are already short.
+			# (text, should_elide) in display order. Only resolution elides —
+			# extension and size are already short.
 			rows = [
 				(ext, False),
 				(res_text, True),
