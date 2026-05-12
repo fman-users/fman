@@ -45,12 +45,13 @@
   - distro: 1.0.4 -> 1.9.0 (Linux)
   - pywinpty: 0.5.7 -> 2.0.14 (Windows)
   - pywin32: 300 -> 308 (Windows)
-  - PyQt5: 5.15.4 -> 5.15.11 (Windows, aligned with other platforms)- **New dependencies**: PyMuPDF 1.27.2.2 (PDF preview), Pillow 11.2.1 (AVIF support)- **Updated fbs dependency syntax** from egg fragment to PEP 440 Direct URL format
+  - PyQt5: 5.15.4 -> 5.15.11 (Windows, aligned with other platforms)
+- **New dependencies**: PyMuPDF 1.27.2.2 (PDF preview), Pillow 11.2.1 (AVIF support)
+- **Updated fbs dependency syntax** from egg fragment to PEP 440 Direct URL format
   for compatibility with modern pip.
 - **Removed Python 3.5/3.6 compatibility workarounds**: Removed unnecessary
   `try/except TypeError` around `Path.resolve(strict=True)` and updated
   version-specific comments.
 - **Reduced macOS app bundle size** from ~110MB to ~77MB by stripping unused
   Qt frameworks (QtQml, QtQuick, QtWebSockets), unused Qt plugins, and
-  build-only dependencies (boto3/botocore) from the frozen bundle.- **Reduced macOS app bundle size** by stripping unused Qt frameworks (QtQml, QtQuick,
-  QtWebSockets), unused Qt plugins, and build-only dependencies (boto3/botocore).
+  build-only dependencies (boto3/botocore) from the frozen bundle.
