@@ -253,20 +253,24 @@ broad for a review pass, worth doing as standalone changes:
 
 ## TODO: release pipeline
 
-- [ ] Scaffold `.github/workflows/release.yml` so tagged commits auto-build and
-      publish the DMG to GitHub Releases. Currently every release is manual
-      (`python build.py freeze` → DMG → `gh release create` by hand). Existing
-      `1.7.4` release was uploaded that way on 2026-04-16.
-      - Trigger on tag push (`v*` or semver-shaped).
-      - Run on `macos-latest`, Python 3.14, `pip install -Ur requirements/mac.txt`.
-      - Steps: freeze, build DMG (see `src/build/create_dmg.py`), `gh release
-        create $TAG target/vitraj.dmg --generate-notes`.
-      - Open questions before scaffolding:
-        - Code signing / notarization — need Apple Developer ID cert in GH
-          secrets (`APPLE_CERTIFICATE_P12`, `APPLE_CERTIFICATE_PASSWORD`,
-          `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`). Current 1.7.4
-          DMG is only ad-hoc signed.
-        - Versioning source of truth — `src/build/settings/base.json`? Workflow
-          should either read from tag or assert tag matches file.
-        - Auto-update channel — does the app poll GitHub Releases for updates?
-          If yes, release naming/format is load-bearing.
+`.github/workflows/release.yml` builds the macOS app and DMG on every `v*`
+semver tag (or manual `workflow_dispatch`) and uploads `target/vitraj.dmg` to a
+GitHub Release via `gh release create … --generate-notes`. The workflow treats
+the tag as the version source of truth — it rewrites `version` in
+`src/build/settings/base.json` in-memory for the build, so devs don't need to
+land a version-bump commit before tagging.
+
+Still ad-hoc only, matching the manually-uploaded `1.7.4` release from
+2026-04-16. Remaining work:
+
+- [ ] Wire in Apple Developer ID signing + notarization. Needs GH secrets
+      (`APPLE_CERTIFICATE_P12`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`,
+      `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`) and an extra step that imports the
+      cert into the runner keychain before `python build.py freeze`. The
+      existing `build_impl/mac.py` already implements `sign()` / `_notarize()`
+      via `altool` — wire those into the workflow once secrets exist.
+- [ ] Decide auto-update channel. If/when the app polls GitHub Releases for
+      updates, release naming/format becomes load-bearing — currently the
+      asset is just `vitraj.dmg`, no per-version `.zip` is uploaded.
+- [ ] Cross-platform — workflow is mac-only. Linux/Windows freezes exist
+      (`build_impl/{ubuntu,arch,fedora,windows}.py`) but aren't wired up.

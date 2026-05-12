@@ -95,6 +95,39 @@ pip install -Ur requirements/fedora.txt
 python build.py freeze
 ```
 
+### Build & release automation
+
+Tagged commits auto-build the macOS app and DMG via GitHub Actions
+(`.github/workflows/release.yml`):
+
+```bash
+git tag v1.7.5
+git push fork v1.7.5
+```
+
+The workflow runs on `macos-latest` with Python 3.14, freezes the app, builds
+the branded DMG, and uploads it to a GitHub Release with auto-generated
+notes. The tag is the version source of truth — `version` in
+`src/build/settings/base.json` is rewritten in-memory for the build, so no
+version-bump commit is required before tagging. The workflow also accepts
+`workflow_dispatch` with an explicit tag for re-runs.
+
+The DMG installer carries the full **vitraj** wordmark logo
+(`src/main/icons/src/logo.svg`, recoloured for the dark background) above a
+drag-to-Applications layout. Rebuild it manually with:
+
+```bash
+python src/build/dmg_background.py   # writes target/dmg_background.png
+python src/build/create_dmg.py       # writes target/vitraj.dmg
+```
+
+Releases are ad-hoc signed (TCC-compliant but unnotarized). Apple Developer
+ID signing + notarization is already implemented in `build_impl/mac.py`
+(`sign()` / `_notarize()` via `altool`) and can be wired into the workflow
+once `APPLE_CERTIFICATE_P12`, `APPLE_ID`, `APPLE_TEAM_ID`, and
+`APPLE_APP_PASSWORD` are added as GitHub secrets. See `AGENTS.md` for the
+remaining release-pipeline work.
+
 ### Optional dependencies
 
 | Package | Purpose | Install |

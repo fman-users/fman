@@ -105,15 +105,24 @@ def generate(project_dir: Path, output: Path):
     glow3 = _radial_gradient(W, H, APPS_X, ICON_Y, 120, (93, 191, 215), alpha_max=12)
     img = Image.alpha_composite(img, glow3)
 
-    icon_svg = project_dir / 'src' / 'main' / 'icons' / 'src' / 'icon.svg'
-    icon_size = 160
-    icon_png = cairosvg.svg2png(
-        url=str(icon_svg), output_width=icon_size, output_height=int(icon_size * 400 / 455)
+    logo_svg = project_dir / 'src' / 'main' / 'icons' / 'src' / 'logo.svg'
+    logo_width = 360
+    logo_height = int(logo_width * 400 / 1217)
+    # logo.svg is designed for light backgrounds — repaint the wordmark and
+    # bracket strokes so they read against the dark gradient.
+    svg_text = (
+        logo_svg.read_text()
+        .replace('fill="#434343"', 'fill="#FFFFFF"')
+        .replace('fill="#777777"', 'fill="#BBBBBB"')
     )
-    icon_img = Image.open(io.BytesIO(icon_png)).convert('RGBA')
-    icon_x = (W - icon_img.width) // 2
-    icon_y = 35
-    img.paste(icon_img, (icon_x, icon_y), icon_img)
+    logo_png = cairosvg.svg2png(
+        bytestring=svg_text.encode('utf-8'),
+        output_width=logo_width, output_height=logo_height,
+    )
+    logo_img = Image.open(io.BytesIO(logo_png)).convert('RGBA')
+    logo_x = (W - logo_img.width) // 2
+    logo_y = 55
+    img.paste(logo_img, (logo_x, logo_y), logo_img)
 
     arrow_layer = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     arrow_draw = ImageDraw.Draw(arrow_layer)
