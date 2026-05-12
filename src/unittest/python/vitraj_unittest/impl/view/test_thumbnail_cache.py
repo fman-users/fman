@@ -157,3 +157,68 @@ class ThumbnailCacheFailedImageTest(TestCase):
 		# re-schedule generation.
 		cache.request(self.bad_path, 128)
 		self.assertNotIn(key, cache._generator_for)
+
+
+class ThumbnailCacheDiskLoadTest(TestCase):
+	"""Regression tests for the async disk-load path (task 6).
+
+	Without these guards the first paint of any uncached image would
+	be permanently broken: ``get()`` would schedule a ``_DiskLoader``
+	for a path that doesn't exist yet, ``_on_disk_loaded`` would mark
+	``_failed``, and ``request()`` would then refuse to generate.
+	"""
+
+	def setUp(self):
+		self._tmp = tempfile.TemporaryDirectory()
+		self.cache_dir = self._tmp.name
+		self.src = os.path.join(self.cache_dir, 'img.jpg')
+		with open(self.src, 'wb') as f:
+			f.write(b'placeholder')
+
+	def tearDown(self):
+		self._tmp.cleanup()
+
+	def test_get_does_not_schedule_when_disk_missing(self):
+		cache = ThumbnailCache(self.cache_dir)
+		self.assertIsNone(cache.get(self.src, 128))
+		# Nothing scheduled, no state changes; request() can still proceed.
+		self.assertEqual(0, len(cache._disk_load_for))
+		self.assertEqual(0, len(cache._failed))
+
+	def test_on_disk_loaded_null_does_not_mark_failed(self):
+		# A disk-load failure (corrupt/missing PNG) must NOT poison _failed,
+		# because _failed blocks generation in request() too.
+		from vitraj.impl.view.thumbnails import cache_key, pick_size_bucket
+		cache = ThumbnailCache(self.cache_dir)
+		mtime_ns = os.stat(self.src).st_mtime_ns
+		key = cache_key(self.src, mtime_ns, pick_size_bucket(128))
+		cache._disk_load_for[key] = self.src
+		cache._on_disk_loaded(key, None)
+		self.assertNotIn(key, cache._failed)
+		self.assertNotIn(key, cache._disk_load_for)
+
+	def test_request_skips_when_disk_load_pending(self):
+		# Avoid duplicate work: if get() already scheduled a disk load,
+		# request() must not also schedule generation.
+		from vitraj.impl.view.thumbnails import cache_key, pick_size_bucket
+		cache = ThumbnailCache(self.cache_dir)
+		mtime_ns = os.stat(self.src).st_mtime_ns
+		key = cache_key(self.src, mtime_ns, pick_size_bucket(128))
+		cache._disk_load_for[key] = self.src
+		cache.request(self.src, 128)
+		self.assertNotIn(key, cache._generator_for)
+
+	def test_generator_and_disk_load_use_separate_dicts(self):
+		# Race guard: _on_disk_loaded popping shared state must not strand
+		# _on_generated. Separate dicts prove no cross-interference.
+		from vitraj.impl.view.thumbnails import cache_key, pick_size_bucket
+		cache = ThumbnailCache(self.cache_dir)
+		mtime_ns = os.stat(self.src).st_mtime_ns
+		bucket = pick_size_bucket(128)
+		key = cache_key(self.src, mtime_ns, bucket)
+		cache._disk_load_for[key] = self.src
+		cache._generator_for[key] = (self.src, mtime_ns, bucket)
+		# Disk loader fails first — must leave generator state intact.
+		cache._on_disk_loaded(key, None)
+		self.assertIn(key, cache._generator_for)
+		self.assertNotIn(key, cache._disk_load_for)
