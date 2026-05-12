@@ -2,6 +2,7 @@ from base64 import b64encode, b64decode
 from concurrent.futures import ThreadPoolExecutor
 from vitraj.impl.util.path import make_absolute
 from vitraj.impl.util.url import get_existing_pardir
+from vitraj.impl.widgets import VIEW_MODES
 from vitraj.url import as_url, dirname, as_human_readable
 from os import getcwd
 from os.path import expanduser
@@ -105,6 +106,8 @@ class SessionManager:
 				path = expanduser('~')
 		url = path if '://' in path else as_url(path)
 		col_widths = pane_info.get('col_widths')
+		view_mode = pane_info.get('view_mode')
+		gallery_tile_size = pane_info.get('gallery_tile_size')
 		callback = None
 		home_dir = as_url(expanduser('~'))
 		try:
@@ -147,6 +150,16 @@ class SessionManager:
 				# This for instance happens when the old and new numbers of
 				# columns don't match (eg. 2 columns before, 3 now).
 				pass
+		if gallery_tile_size:
+			try:
+				pane._widget.set_gallery_tile_size(int(gallery_tile_size))
+			except (ValueError, TypeError):
+				pass
+		if view_mode in VIEW_MODES:
+			try:
+				pane._widget.set_view_mode(view_mode)
+			except ValueError:
+				pass
 	def _exists_and_is_dir(self, url):
 		try:
 			return self._fs.is_dir(url)
@@ -167,7 +180,9 @@ class SessionManager:
 	def _read_pane_settings(self, pane):
 		return {
 			'location': pane.get_location(),
-			'col_widths': pane.get_column_widths()
+			'col_widths': pane.get_column_widths(),
+			'view_mode': pane.get_view_mode(),
+			'gallery_tile_size': pane.get_gallery_tile_size(),
 		}
 
 def _encode(bytes_):

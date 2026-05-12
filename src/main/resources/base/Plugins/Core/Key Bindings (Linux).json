@@ -8,6 +8,7 @@
 	{ "keys": ["Ctrl+A"], "command": "select_all" },
 	{ "keys": ["Ctrl+D"], "command": "deselect" },
 	{ "keys": ["Ctrl+."], "command": "toggle_hidden_files" },
+	{ "keys": ["Ctrl+G"], "command": "toggle_gallery_view" },
 	{ "keys": ["Ctrl+P"], "command": "go_to" },
 	{ "keys": ["Ctrl+Shift+P"], "command": "command_palette" },
 	{ "keys": ["Ctrl+Q"], "command": "quit" },

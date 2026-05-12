@@ -37,7 +37,6 @@ def freeze():
 		path('lib/mac/Sparkle-1.22.0/Sparkle.framework'),
 		path('${freeze_dir}/Contents/Frameworks/Sparkle.framework')
 	)
-	copy_python_library('send2trash', path('${core_plugin_in_freeze_dir}'))
 	move(
 		path('${core_plugin_in_freeze_dir}/bin/mac/7za'),
 		path('${freeze_dir}/Contents/MacOS')
@@ -46,6 +45,39 @@ def freeze():
 	# Without this, unsigned apps are silently denied access to Downloads etc.
 	run(['codesign', '--force', '--deep', '--sign', '-', path('${freeze_dir}')],
 		check=True)
+
+def _strip_unused_from_bundle():
+	frameworks = path('${freeze_dir}/Contents/Frameworks')
+	resources = path('${freeze_dir}/Contents/Resources')
+	# boto3/botocore are build-system-only deps, not used at runtime (~40MB):
+	for dir_name in ('boto3', 'botocore', 's3transfer'):
+		for base in (frameworks, resources):
+			dir_path = join(base, dir_name)
+			if os.path.islink(dir_path):
+				os.unlink(dir_path)
+			elif os.path.isdir(dir_path):
+				rmtree(dir_path)
+	# Remove unused Qt frameworks (fman only uses Core, Gui, Widgets,
+	# MacExtras, PrintSupport, Svg):
+	qt_lib = join(frameworks, 'PyQt5', 'Qt5', 'lib')
+	for unused_fw in (
+		'QtQml', 'QtQmlModels', 'QtQuick', 'QtWebSockets'
+	):
+		fw_path = join(qt_lib, unused_fw + '.framework')
+		if os.path.isdir(fw_path):
+			rmtree(fw_path)
+	# Remove unused Qt platform plugins:
+	qt_plugins = join(frameworks, 'PyQt5', 'Qt5', 'plugins')
+	for unused_plugin in (
+		'platforms/libqwebgl.dylib', 'platforms/libqminimal.dylib',
+		'platforms/libqoffscreen.dylib', 'bearer', 'generic',
+		'platformthemes'
+	):
+		p = join(qt_plugins, unused_plugin)
+		if os.path.isdir(p):
+			rmtree(p)
+		elif os.path.isfile(p):
+			remove(p)
 
 def _strip_unused_from_bundle():
 	frameworks = path('${freeze_dir}/Contents/Frameworks')

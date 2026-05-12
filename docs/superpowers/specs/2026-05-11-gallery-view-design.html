@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gallery View — Design Spec — fman</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..900,0..100,0..1&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #f1e9d6;
+    --paper-deep: #eadfc6;
+    --paper-edge: #d8cbac;
+    --ink: #14213d;
+    --ink-soft: #2a3457;
+    --ink-faint: #4d557a;
+    --rule: #1c2a4a;
+    --vermillion: #c8442a;
+    --vermillion-deep: #9c2f1a;
+    --sage: #5d7464;
+    --ochre: #b08440;
+    --shadow: rgba(20, 33, 61, 0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 30% 0%, rgba(200,68,42,0.05), transparent 60%),
+      radial-gradient(ellipse 60% 80% at 100% 100%, rgba(93,116,100,0.08), transparent 60%),
+      var(--paper);
+    color: var(--ink);
+    font-family: "EB Garamond", "Iowan Old Style", Georgia, serif;
+    font-size: 18px;
+    line-height: 1.55;
+    background-attachment: fixed;
+  }
+
+  /* Paper grain + grid */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(var(--paper-edge) 1px, transparent 1px),
+      linear-gradient(90deg, var(--paper-edge) 1px, transparent 1px);
+    background-size: 96px 96px;
+    opacity: 0.18;
+    z-index: 0;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(rgba(20,33,61,0.07) 1px, transparent 1px);
+    background-size: 3px 3px;
+    opacity: 0.4;
+    mix-blend-mode: multiply;
+    z-index: 0;
+  }
+
+  .sheet {
+    position: relative;
+    z-index: 1;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 72px 56px 120px;
+  }
+
+  /* ────────── Masthead ────────── */
+  .masthead {
+    border-top: 2px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 14px 0 18px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 24px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-soft);
+  }
+  .masthead .right { text-align: right; }
+  .masthead .mark {
+    font-family: "Fraunces", serif;
+    font-weight: 900;
+    font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    text-transform: none;
+    line-height: 1;
+  }
+  .masthead .mark .dot { color: var(--vermillion); }
+
+  /* ────────── Title block ────────── */
+  .title-block {
+    padding: 64px 0 48px;
+    border-bottom: 1px solid var(--ink);
+    position: relative;
+  }
+  .kicker {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--vermillion);
+    margin-bottom: 28px;
+  }
+  .kicker::before { content: "§ "; color: var(--ink-faint); }
+  h1 {
+    font-family: "Fraunces", serif;
+    font-variation-settings: "opsz" 144, "SOFT" 80, "WONK" 1;
+    font-weight: 600;
+    font-style: italic;
+    font-size: clamp(56px, 9vw, 132px);
+    line-height: 0.92;
+    letter-spacing: -0.035em;
+    margin: 0;
+    color: var(--ink);
+  }
+  h1 .em {
+    font-style: normal;
+    font-weight: 900;
+    color: var(--vermillion);
+    font-variation-settings: "opsz" 144, "WONK" 1;
+  }
+  .subtitle {
+    margin-top: 28px;
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 24px;
+    line-height: 1.35;
+    color: var(--ink-soft);
+    max-width: 720px;
+  }
+
+  /* Frontmatter strip */
+  .frontmatter {
+    margin-top: 56px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+  }
+  .frontmatter dl {
+    margin: 0;
+    padding: 18px 24px 16px 0;
+    border-right: 1px dashed var(--ink-faint);
+  }
+  .frontmatter dl:last-child { border-right: none; padding-right: 0; }
+  .frontmatter dt {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .frontmatter dd {
+    margin: 0;
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  .frontmatter .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .frontmatter .status::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    background: var(--vermillion);
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(200,68,42,0.18);
+  }
+
+  /* ────────── Body sections ────────── */
+  section {
+    margin-top: 88px;
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 56px;
+    position: relative;
+  }
+  section > .marginalia {
+    position: relative;
+  }
+  section > .marginalia .num {
+    font-family: "Fraunces", serif;
+    font-weight: 900;
+    font-style: italic;
+    font-size: 88px;
+    line-height: 0.9;
+    color: var(--paper-edge);
+    letter-spacing: -0.04em;
+    margin-bottom: 14px;
+    font-variation-settings: "opsz" 144, "WONK" 1;
+  }
+  section > .marginalia .label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--vermillion-deep);
+    line-height: 1.4;
+    padding-top: 4px;
+    border-top: 2px solid var(--vermillion);
+    display: inline-block;
+  }
+  section > .marginalia .note {
+    margin-top: 18px;
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink-faint);
+    max-width: 180px;
+  }
+
+  section > .content > h2 {
+    font-family: "Fraunces", serif;
+    font-variation-settings: "opsz" 96, "SOFT" 60;
+    font-weight: 700;
+    font-size: 44px;
+    line-height: 1;
+    letter-spacing: -0.025em;
+    margin: 0 0 32px;
+    color: var(--ink);
+  }
+  section > .content > h2 .ital { font-style: italic; font-weight: 500; color: var(--ink-soft); }
+
+  section p { margin: 0 0 18px; max-width: 68ch; }
+  section p:last-child { margin-bottom: 0; }
+
+  /* Drop cap on the first paragraph of certain sections */
+  .drop-cap p:first-of-type::first-letter {
+    font-family: "Fraunces", serif;
+    font-variation-settings: "opsz" 144, "WONK" 1;
+    font-weight: 900;
+    font-size: 88px;
+    line-height: 0.78;
+    float: left;
+    padding: 6px 14px 0 0;
+    color: var(--vermillion);
+  }
+
+  /* Lists */
+  .content ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 18px;
+  }
+  .content ul li {
+    position: relative;
+    padding: 6px 0 6px 28px;
+    border-bottom: 1px dotted var(--ink-faint);
+  }
+  .content ul li:last-child { border-bottom: none; }
+  .content ul li::before {
+    content: "→";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    font-family: "JetBrains Mono", monospace;
+    color: var(--vermillion);
+    font-weight: 700;
+  }
+  .content ul.no-arrow li::before { content: "◦"; color: var(--ink-faint); }
+  .content ul.checkmarks li::before { content: "✓"; color: var(--sage); }
+  .content ul.crosses li::before { content: "×"; color: var(--vermillion); font-weight: 900; }
+
+  /* Two-up goals/non-goals */
+  .two-up {
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr;
+    gap: 32px;
+    align-items: stretch;
+    margin-top: 8px;
+  }
+  .two-up .divider { background: var(--ink-faint); width: 1px; }
+  .two-up h3 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    margin: 0 0 16px;
+    color: var(--ink);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .two-up h3::before {
+    content: "";
+    width: 7px; height: 7px;
+    background: currentColor;
+    transform: rotate(45deg);
+  }
+  .two-up .goals h3 { color: var(--sage); border-bottom-color: var(--sage); }
+  .two-up .non-goals h3 { color: var(--vermillion); border-bottom-color: var(--vermillion); }
+
+  /* Architecture diagram */
+  .arch {
+    background: var(--paper-deep);
+    border: 1px solid var(--ink);
+    padding: 32px 36px;
+    margin: 16px 0 24px;
+    position: relative;
+    box-shadow: 6px 6px 0 var(--ink);
+  }
+  .arch::before {
+    content: "ARCHITECTURE — DIAGRAM 01";
+    position: absolute;
+    top: -10px;
+    left: 24px;
+    background: var(--paper);
+    padding: 0 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    color: var(--vermillion);
+  }
+  .arch-diagram {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+  }
+  .arch-node {
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    padding: 12px 22px;
+    min-width: 220px;
+    text-align: center;
+    position: relative;
+  }
+  .arch-node .tag {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--vermillion);
+    color: var(--paper);
+    font-size: 9px;
+    padding: 2px 6px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .arch-node.root {
+    background: var(--ink);
+    color: var(--paper);
+    font-weight: 700;
+  }
+  .arch-node.stack {
+    border-style: dashed;
+    background: var(--paper-deep);
+  }
+  .arch-children {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .arch-rail {
+    width: 1px;
+    height: 18px;
+    background: var(--ink);
+  }
+  .arch-rail.branch {
+    width: 60%;
+    height: 1px;
+    margin: 0 auto;
+  }
+  .arch-legend {
+    margin-top: 18px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    text-align: center;
+    letter-spacing: 0.18em;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--paper-deep);
+    border-left: 4px solid var(--vermillion);
+    padding: 24px 28px 22px;
+    margin: 20px 0;
+    position: relative;
+  }
+  .card h4 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin: 0 0 4px;
+    color: var(--vermillion-deep);
+  }
+  .card h4 .filename {
+    color: var(--ink-faint);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .card h4 .filename::before { content: "· "; color: var(--ink-faint); }
+  .card .card-title {
+    font-family: "Fraunces", serif;
+    font-weight: 700;
+    font-style: italic;
+    font-size: 28px;
+    margin: 0 0 14px;
+    letter-spacing: -0.015em;
+  }
+
+  /* Code & inline mono */
+  code, .mono {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.86em;
+    background: rgba(20,33,61,0.07);
+    padding: 1px 6px;
+    border-radius: 2px;
+    color: var(--ink);
+  }
+  pre {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 22px 24px;
+    overflow-x: auto;
+    margin: 18px 0;
+    line-height: 1.6;
+    border-left: 4px solid var(--vermillion);
+    position: relative;
+  }
+  pre::before {
+    content: "// EXAMPLE";
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--vermillion);
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+  .tok-com { color: #b08440; font-style: italic; }
+  .tok-key { color: #e9a87a; }
+  .tok-str { color: #c0d8a4; }
+
+  /* Truncation example */
+  .example {
+    background: var(--paper-deep);
+    padding: 22px 28px;
+    border: 1px dashed var(--ink);
+    margin: 18px 0;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+  }
+  .example .row { padding: 6px 0; }
+  .example .lbl {
+    display: inline-block;
+    min-width: 140px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 10px;
+  }
+  .example .val .keep { background: rgba(200,68,42,0.22); color: var(--vermillion-deep); padding: 1px 4px; border-radius: 2px; }
+  .example .val .cut { color: var(--ink-faint); text-decoration: line-through; }
+
+  /* Tile-size scale */
+  .scale {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin: 18px 0 22px;
+  }
+  .scale-row {
+    display: grid;
+    grid-template-columns: 64px 1fr 60px;
+    align-items: center;
+    gap: 18px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+  }
+  .scale-row .tag {
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-faint);
+    font-size: 10px;
+  }
+  .scale-row .bar {
+    height: 22px;
+    background: var(--paper-deep);
+    border: 1px solid var(--ink);
+    position: relative;
+    overflow: hidden;
+  }
+  .scale-row .fill {
+    height: 100%;
+    background: repeating-linear-gradient(45deg, var(--vermillion) 0 6px, var(--vermillion-deep) 6px 12px);
+  }
+  .scale-row .val { text-align: right; font-weight: 700; }
+
+  /* Keys */
+  kbd {
+    display: inline-block;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    padding: 2px 8px;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    border-bottom-width: 3px;
+    border-radius: 4px;
+    box-shadow: 0 1px 0 var(--shadow);
+    margin: 0 2px;
+    vertical-align: 1px;
+    color: var(--ink);
+  }
+  kbd.accent {
+    background: var(--vermillion);
+    color: var(--paper);
+    border-color: var(--vermillion-deep);
+  }
+
+  /* Tables */
+  table.edges {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0 8px;
+    font-size: 16px;
+  }
+  table.edges caption {
+    text-align: left;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--vermillion);
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 0;
+  }
+  table.edges thead th {
+    text-align: left;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--ink);
+    padding: 14px 14px 10px 0;
+    font-weight: 600;
+  }
+  table.edges tbody td {
+    padding: 14px 14px 14px 0;
+    border-bottom: 1px dotted var(--ink-faint);
+    vertical-align: top;
+  }
+  table.edges tbody tr:last-child td { border-bottom: 1px solid var(--ink); }
+  table.edges tbody td:first-child {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-weight: 600;
+    color: var(--vermillion-deep);
+    width: 38%;
+    padding-right: 24px;
+  }
+
+  /* File touch list */
+  .files {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    margin-top: 16px;
+  }
+  .file-col h4 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .file-col h4 .badge {
+    font-size: 9px;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 2px 6px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .file-col.new h4 .badge { background: var(--sage); }
+  .file-col.mod h4 .badge { background: var(--ochre); color: var(--ink); }
+  .file-col ul { list-style: none; padding: 0; margin: 0; }
+  .file-col li {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    padding: 6px 0 6px 22px;
+    border-bottom: 1px dashed var(--ink-faint);
+    position: relative;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+  .file-col li::before {
+    content: "▸";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    color: var(--vermillion);
+  }
+  .file-col.new li::before { color: var(--sage); content: "+"; font-weight: 900; }
+  .file-col.mod li::before { color: var(--ochre); content: "~"; font-weight: 900; }
+
+  /* Pullquote — for filename rule */
+  .pull {
+    margin: 28px 0;
+    padding: 24px 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 26px;
+    line-height: 1.3;
+    letter-spacing: -0.012em;
+    color: var(--ink);
+    position: relative;
+    padding-left: 36px;
+  }
+  .pull::before {
+    content: "“";
+    position: absolute;
+    left: -4px;
+    top: 4px;
+    font-family: "Fraunces", serif;
+    font-weight: 900;
+    font-style: italic;
+    font-size: 90px;
+    line-height: 0.8;
+    color: var(--vermillion);
+  }
+  .pull em { font-style: normal; font-weight: 700; }
+
+  /* Tile preview mock */
+  .tile-mock-wrap {
+    margin: 16px 0 22px;
+    padding: 28px;
+    background: var(--paper-deep);
+    border: 1px solid var(--ink);
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 32px;
+    align-items: center;
+  }
+  .tile-mock {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    background:
+      linear-gradient(135deg, #b9613b 0%, #d49262 35%, #4f6f76 100%);
+    border: 1px solid var(--ink);
+    box-shadow: 4px 4px 0 var(--ink);
+    overflow: hidden;
+  }
+  .tile-mock::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 30% 40%, rgba(255,255,255,0.18), transparent 40%),
+      radial-gradient(circle at 70% 70%, rgba(0,0,0,0.25), transparent 50%);
+  }
+  .tile-mock .ovl {
+    position: absolute;
+    z-index: 2;
+    background: rgba(20, 20, 28, 0.55);
+    color: #ffffff;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 7px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .tile-mock .ovl.tl { top: 8px; left: 8px; }
+  .tile-mock .ovl.tr { top: 8px; right: 8px; }
+  .tile-mock .ovl.br { bottom: 8px; right: 8px; }
+
+  /* Small-tile stacked overlay variant */
+  .tile-mock.small {
+    width: 110px;
+    height: 110px;
+  }
+  .tile-mock.small .stack {
+    position: absolute;
+    z-index: 2;
+    top: 6px;
+    left: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-width: 66%;
+  }
+  .tile-mock.small .stack .ovl {
+    position: static;
+    font-size: 9px;
+    padding: 2px 5px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tile-mock.small .label {
+    bottom: -26px;
+    font-size: 12px;
+  }
+  .tile-mock .label {
+    position: absolute;
+    bottom: -28px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: "EB Garamond", serif;
+    font-size: 13px;
+    color: var(--ink);
+    z-index: 3;
+  }
+  .tile-legend {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .tile-legend dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; }
+  .tile-legend dt {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--vermillion);
+    padding-top: 3px;
+  }
+  .tile-legend dd { margin: 0; padding-top: 1px; }
+
+  /* Colophon */
+  .colophon {
+    margin-top: 140px;
+    padding-top: 32px;
+    border-top: 2px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 24px;
+    align-items: end;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .colophon .center {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: -0.01em;
+  }
+  .colophon .right { text-align: right; }
+
+  /* ────────── Animations ────────── */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .masthead, .title-block, .frontmatter, section, .colophon {
+    animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .title-block { animation-delay: 0.05s; }
+  .frontmatter { animation-delay: 0.15s; }
+  section:nth-of-type(1) { animation-delay: 0.25s; }
+  section:nth-of-type(2) { animation-delay: 0.30s; }
+  section:nth-of-type(3) { animation-delay: 0.35s; }
+  section:nth-of-type(4) { animation-delay: 0.40s; }
+  section:nth-of-type(5) { animation-delay: 0.45s; }
+  section:nth-of-type(6) { animation-delay: 0.50s; }
+  section:nth-of-type(7) { animation-delay: 0.55s; }
+  section:nth-of-type(n+8) { animation-delay: 0.60s; }
+  .colophon { animation-delay: 0.7s; }
+
+  /* ────────── Responsive ────────── */
+  @media (max-width: 880px) {
+    .sheet { padding: 40px 22px 80px; }
+    .frontmatter { grid-template-columns: 1fr 1fr; }
+    .frontmatter dl:nth-child(2) { border-right: none; }
+    .frontmatter dl { border-bottom: 1px dashed var(--ink-faint); padding: 14px 0; }
+    .frontmatter dl:nth-last-child(-n+2) { border-bottom: none; }
+    section { grid-template-columns: 1fr; gap: 12px; }
+    section > .marginalia { display: flex; align-items: center; gap: 14px; }
+    section > .marginalia .num { font-size: 56px; margin: 0; }
+    section > .marginalia .note { display: none; }
+    .two-up { grid-template-columns: 1fr; }
+    .two-up .divider { display: none; }
+    .files { grid-template-columns: 1fr; }
+    .tile-mock-wrap { grid-template-columns: 1fr; }
+    .tile-mock { margin: 0 auto; }
+    table.edges tbody td:first-child { width: auto; display: block; padding-bottom: 0; }
+    table.edges tbody td:last-child { display: block; padding-top: 4px; }
+    table.edges thead { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="masthead">
+    <div class="left">FMAN&nbsp;&middot;&nbsp;DESIGN SPECIFICATION</div>
+    <div class="mark">fman<span class="dot">.</span></div>
+    <div class="right">Vol. 1 &middot; No. 01 &middot; 2026</div>
+  </header>
+
+  <section class="title-block" style="display:block; grid-template-columns:none; gap:0;">
+    <div class="kicker">Feature design / view layer</div>
+    <h1>Gallery<br/><span class="em">View.</span></h1>
+    <p class="subtitle">A per-pane grid view for fman — thumbnails for images, file-type icons for the rest, with metadata laid over the corners and a keyboard you can lean on.</p>
+
+    <div class="frontmatter">
+      <dl>
+        <dt>Status</dt>
+        <dd><span class="status">Approved</span></dd>
+      </dl>
+      <dl>
+        <dt>Date</dt>
+        <dd>2026&middot;05&middot;11</dd>
+      </dl>
+      <dl>
+        <dt>Branch</dt>
+        <dd class="mono" style="font-size:14px; font-weight:500;">feature/gallery-view</dd>
+      </dl>
+      <dl>
+        <dt>Scope</dt>
+        <dd>View layer · single-spec</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ────────── 01 Goals & Non-goals ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">01</div>
+      <div class="label">Intent</div>
+      <p class="note">What this feature is for — and, more importantly, what it is <em>not</em> for.</p>
+    </aside>
+    <div class="content">
+      <h2>Goals <span class="ital">&amp; non-goals.</span></h2>
+      <div class="two-up">
+        <div class="goals">
+          <h3>What it does</h3>
+          <ul class="checkmarks">
+            <li>Adds an alternative file view (gallery / icon grid) selectable per pane.</li>
+            <li>Shows image thumbnails for image files, file-type icons elsewhere.</li>
+            <li>Overlays key metadata on image tiles — extension, resolution, size.</li>
+            <li>Leaves the existing list view untouched and fully working.</li>
+            <li>Persists mode and tile size per pane across sessions.</li>
+          </ul>
+        </div>
+        <div class="divider"></div>
+        <div class="non-goals">
+          <h3>What it doesn't do</h3>
+          <ul class="crosses">
+            <li>Replace or rewrite the existing <code>FileListView</code>.</li>
+            <li>Recurse into folders for nested previews.</li>
+            <li>Generate video, document, or PDF thumbnails.</li>
+            <li>Mouse drag-resize — keyboard <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>+</kbd>/<kbd>−</kbd> only.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── 02 Architecture ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">02</div>
+      <div class="label">Architecture</div>
+      <p class="note">Two views share a model and a selection. The pane just shows one at a time.</p>
+    </aside>
+    <div class="content drop-cap">
+      <h2>Architecture.</h2>
+      <p>Both views bind to the same <code>SortedFileSystemModel</code> and share a single <code>QItemSelectionModel</code>, so cursor and selection stay coherent across toggles. The pane is the one place that knows which view is on screen — it swaps them inside a <code>QStackedWidget</code> and exposes two small methods to the rest of the app.</p>
+
+      <div class="arch">
+        <div class="arch-diagram">
+          <div class="arch-node root">DirectoryPaneWidget</div>
+          <div class="arch-rail"></div>
+          <div class="arch-children">
+            <div class="arch-node">LocationBar</div>
+            <div class="arch-node stack">QStackedWidget<span class="tag">new</span></div>
+          </div>
+          <div class="arch-rail"></div>
+          <div class="arch-children">
+            <div class="arch-node">FileListView <span style="color:var(--ink-faint)">— existing</span></div>
+            <div class="arch-node" style="border-color:var(--vermillion); color:var(--vermillion-deep); font-weight:700;">GalleryView <span style="color:var(--vermillion)">— new</span></div>
+          </div>
+        </div>
+        <div class="arch-legend">Both children · same model · same selection model</div>
+      </div>
+
+      <p>The pane gains a public surface that the rest of fman can reach for:</p>
+      <ul>
+        <li><code>set_view_mode(mode: 'list' | 'gallery')</code> — switch the active view.</li>
+        <li><code>get_view_mode() -&gt; 'list' | 'gallery'</code> — read the current mode.</li>
+      </ul>
+      <p>Both values — mode and tile size — persist per pane in fman's session state, keyed to the pane identity.</p>
+    </div>
+  </section>
+
+  <!-- ────────── 03 Components ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">03</div>
+      <div class="label">Components</div>
+      <p class="note">Three new pieces. Each has one job.</p>
+    </aside>
+    <div class="content">
+      <h2>Components <span class="ital">in three movements.</span></h2>
+
+      <div class="card">
+        <h4>I. View<span class="filename">src/main/python/fman/impl/view/gallery.py</span></h4>
+        <div class="card-title">GalleryView</div>
+        <p>Subclass of <code>QListView</code> configured for icon-mode rendering. Reuses the existing <code>DragAndDrop</code> mixin so drop targets, drag previews, and ghost cursors all match list-view behaviour.</p>
+        <ul>
+          <li><code>viewMode = IconMode</code>, <code>movement = Static</code>, <code>resizeMode = Adjust</code>.</li>
+          <li><code>wordWrap = True</code>, <code>uniformItemSizes = True</code>, <code>flow = LeftToRight</code>.</li>
+          <li>Owns its own <code>GalleryItemDelegate</code> for tile rendering.</li>
+          <li>Catches <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd> in <code>keyPressEvent</code>.</li>
+          <li>Emits the same public signals (<code>doubleClicked</code>, context-menu events) the pane already listens for.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>II. Delegate<span class="filename">embedded in gallery.py</span></h4>
+        <div class="card-title">GalleryItemDelegate</div>
+        <p>Renders each tile in four layers.</p>
+
+        <div class="tile-mock-wrap">
+          <div style="position:relative;">
+            <div class="tile-mock">
+              <div class="ovl tl">JPG</div>
+              <div class="ovl tr">1920×1080</div>
+              <div class="ovl br">4.2 MB</div>
+            </div>
+            <div style="text-align:center; margin-top:16px; font-family:'EB Garamond',serif; font-size:13px; color:var(--ink);">IMG…final</div>
+            <div style="text-align:center; margin-top:4px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.18em; color:var(--ink-faint);">A · SPREAD · ≥ 140 px</div>
+          </div>
+          <div class="tile-legend">
+            <dl>
+              <dt>BG</dt><dd>Selection / hover from the active style.</dd>
+              <dt>Image</dt><dd>Square thumbnail at <code>tile − padding</code>, or file-type icon for non-images.</dd>
+              <dt>Label</dt><dd>Filename without extension, truncated per the first-3 / last-5 rule.</dd>
+              <dt>Overlays</dt><dd><em>Images only.</em> Rounded badges with <code>rgba(20,20,28,0.55)</code> background and a subtle backdrop blur — the image stays partially visible through them. White 600-weight text, 4 px inset from tile edge.</dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Small tile layout -->
+        <div class="tile-mock-wrap" style="grid-template-columns: 140px 1fr;">
+          <div style="position:relative; display:flex; justify-content:flex-start;">
+            <div class="tile-mock small" style="background: linear-gradient(135deg, #2a5d7a 0%, #74a3b8 45%, #c3884f 100%);">
+              <div class="stack">
+                <div class="ovl">PNG</div>
+                <div class="ovl">3840×2160</div>
+                <div class="ovl">12.7 MB</div>
+              </div>
+            </div>
+            <div style="position:absolute; bottom:-26px; left:0; right:30px; text-align:center; font-family:'EB Garamond',serif; font-size:12px; color:var(--ink);">scr…shot</div>
+            <div style="position:absolute; bottom:-44px; left:0; right:30px; text-align:center; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.18em; color:var(--ink-faint);">B · STACKED · &lt; 140 px</div>
+          </div>
+          <div class="tile-legend">
+            <p style="margin:0 0 10px;"><strong>When the tile narrows below the spread breakpoint, all three badges collapse into a single column in the top-left corner.</strong></p>
+            <dl>
+              <dt>Column</dt><dd>Capped at 60% of tile width — guarantees the right portion of the thumbnail stays uncovered.</dd>
+              <dt>Stacking</dt><dd>Vertical, 3 px gap. Resolution elides first (<code>1920×…</code>) if its row would exceed the column cap.</dd>
+              <dt>Overlap</dt><dd>None — by construction, badges share a single column and never collide with the size in the opposite corner.</dd>
+              <dt>Threshold</dt><dd><code>STACK_BREAKPOINT_PX = 140</code> — single tunable constant.</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>III. Cache<span class="filename">src/main/python/fman/impl/view/thumbnails.py</span></h4>
+        <div class="card-title">ThumbnailCache</div>
+        <p>Persistent disk cache under fman's user cache directory at <code>&lt;cache_dir&gt;/thumbnails/</code>. Cache keys are <code>SHA1(absolute_path | mtime_ns | size_bucket)</code> — file changes invalidate automatically.</p>
+        <ul>
+          <li>Size buckets: <strong>128</strong>, <strong>256</strong>, <strong>512</strong> px. Tiles downscale the nearest-larger bucket.</li>
+          <li><code>get(url, size_bucket)</code> — sync cache lookup, returns <code>QPixmap | None</code>.</li>
+          <li><code>request(url, size_bucket, callback)</code> — schedules async generation on a <code>QThreadPool</code>, callback fires on the main thread.</li>
+          <li>Resolution metadata is read once via <code>QImageReader.size()</code> and held in an in-memory <code>WeakValueDictionary</code> keyed by <code>(path, mtime)</code>.</li>
+          <li>Supported formats: <code>QImageReader.supportedImageFormats()</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── 04 Filename rule ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">04</div>
+      <div class="label">Filename rule</div>
+      <p class="note">First three are sacred. Last five if there's room. Don't truncate when you don't need to.</p>
+    </aside>
+    <div class="content">
+      <h2>The truncation rule.</h2>
+
+      <p class="pull">First <em>three</em> always. Last <em>five</em> when we can. Never cut what doesn't need cutting.</p>
+
+      <ol style="padding-left:22px; margin:0 0 18px;">
+        <li>Strip the extension first.</li>
+        <li>If the stripped name fits the tile width → show it whole. No truncation when avoidable.</li>
+        <li>Otherwise, try <code>&lt;first3&gt;…&lt;last5&gt;</code> — if it fits, that's the result.</li>
+        <li>If even that's too wide → drop the suffix and show <code>&lt;first3&gt;…</code>. The first 3 always wins.</li>
+      </ol>
+
+      <div class="example">
+        <div class="row"><span class="lbl">Short name</span><span class="val"><span class="keep">report</span> → <span class="keep">report</span></span></div>
+        <div class="row"><span class="lbl">Original</span><span class="val">IMG_20250508_some_long_descriptive_name_final.jpg</span></div>
+        <div class="row"><span class="lbl">Stripped</span><span class="val"><span class="keep">IMG</span>_20250508_some_long_descriptive_name_<span class="keep">final</span></span></div>
+        <div class="row"><span class="lbl">Tile @ 120px</span><span class="val"><span class="keep">IMG</span><span class="cut">_20250508_some_long_descriptive_name_</span>…<span class="keep">final</span></span></div>
+        <div class="row"><span class="lbl">Displayed @ 120px</span><span class="val" style="font-size:15px;"><span class="keep">IMG</span>…<span class="keep">final</span></span></div>
+        <div class="row"><span class="lbl">Displayed @ 80px</span><span class="val" style="font-size:15px;"><span class="keep">IMG</span>…</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── 05 Tile size ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">05</div>
+      <div class="label">Tile size</div>
+      <p class="note">Continuous resize, ±20 px. Thumbnail grows with the tile.</p>
+    </aside>
+    <div class="content">
+      <h2>Resizing tiles.</h2>
+      <p>Keyboard-only. Continuous steps of ±20 px per press. The icon and the grid grow in lockstep — set both <code>iconSize</code> and <code>gridSize</code> on each step so the thumbnail and label stay in proportion.</p>
+
+      <div class="scale">
+        <div class="scale-row">
+          <div class="tag">Min</div>
+          <div class="bar"><div class="fill" style="width:20%;"></div></div>
+          <div class="val">80 px</div>
+        </div>
+        <div class="scale-row">
+          <div class="tag">Default</div>
+          <div class="bar"><div class="fill" style="width:40%;"></div></div>
+          <div class="val">160 px</div>
+        </div>
+        <div class="scale-row">
+          <div class="tag">Max</div>
+          <div class="bar"><div class="fill" style="width:100%;"></div></div>
+          <div class="val">400 px</div>
+        </div>
+      </div>
+
+      <p style="margin-top:14px;">
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>&nbsp;<kbd class="accent">+</kbd> grow &nbsp;·&nbsp;
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>&nbsp;<kbd class="accent">−</kbd> shrink &nbsp;·&nbsp;
+        <kbd>Ctrl</kbd>/<kbd>⌘</kbd>&nbsp;<kbd>0</kbd> reset to default.
+      </p>
+      <p>Tile size persists per pane in session state.</p>
+    </div>
+  </section>
+
+  <!-- ────────── 06 Toggle command ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">06</div>
+      <div class="label">Command</div>
+      <p class="note">Keyboard-driven, palette-discoverable. The fman way.</p>
+    </aside>
+    <div class="content">
+      <h2>View toggle.</h2>
+      <p>A new application command, <code>toggle_gallery_view</code>, registered in the core plugin registry.</p>
+      <ul>
+        <li>Default binding: <kbd>Ctrl</kbd> + <kbd>G</kbd> &nbsp;/&nbsp; <kbd>⌘</kbd> + <kbd>G</kbd>.</li>
+        <li>Palette caption: <em>“Toggle Gallery View.”</em></li>
+        <li>Flips the focused pane's view mode between <code>'list'</code> and <code>'gallery'</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ────────── 07 Navigation ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">07</div>
+      <div class="label">Navigation</div>
+      <p class="note">Same pane API; different keys underneath.</p>
+    </aside>
+    <div class="content">
+      <h2>Keyboard navigation.</h2>
+      <p><code>QListView</code>'s <code>IconMode</code> already handles 2D arrow navigation, <kbd>Home</kbd>/<kbd>End</kbd>, and <kbd>PageUp</kbd>/<kbd>PageDown</kbd> out of the box. <code>DirectoryPaneWidget</code>'s existing <code>move_cursor_*</code> methods need parallel wiring on the gallery view so the public pane API stays uniform — they delegate to <code>QListView</code>'s built-ins instead of the custom <code>QTableView</code> logic.</p>
+    </div>
+  </section>
+
+  <!-- ────────── 08 Edge cases ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">08</div>
+      <div class="label">Edge cases</div>
+      <p class="note">The list of things that <em>will</em> happen.</p>
+    </aside>
+    <div class="content">
+      <h2>Edge cases.</h2>
+      <table class="edges">
+        <caption>Behaviour reference</caption>
+        <thead>
+          <tr><th>Situation</th><th>Behaviour</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Switching mode mid-load</td><td>Both views share the model; loading streams into both.</td></tr>
+          <tr><td>Filter bar active</td><td>Works unchanged — it operates on the model.</td></tr>
+          <tr><td>The “..” entry and folders</td><td>File-type icon, no metadata overlays.</td></tr>
+          <tr><td>Very large folders</td><td>Lazy thumbnails + viewport clipping — only visible tiles paint or request thumbnails.</td></tr>
+          <tr><td>Unknown or corrupt image</td><td>Falls back to file-type icon; resolution overlay omitted; size overlay still shown.</td></tr>
+          <tr><td>Sort changes while in gallery</td><td>Model resorts; gallery reflows naturally. Switching back to list shows the new sort.</td></tr>
+          <tr><td>Drag &amp; drop</td><td>Reuses <code>DragAndDrop</code> mixin; behaviour matches list view.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ────────── 09 Testing ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">09</div>
+      <div class="label">Testing</div>
+      <p class="note">Unit for rules. Integration for flow.</p>
+    </aside>
+    <div class="content">
+      <h2>Testing plan.</h2>
+
+      <h3 style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:var(--vermillion); margin:18px 0 6px;">Unit · src/unittest/python/fman_unittest/impl/view/</h3>
+      <ul>
+        <li><code>test_gallery_filename_truncation.py</code> — short, exact-fit, just-over, very long, names shorter than 3, first-3 always preserved, last-5 dropped when tile too narrow.</li>
+        <li><code>test_gallery_overlay_layout.py</code> — overlay switches to stacked at <code>tile_width &lt; 140 px</code>; badges never overlap each other or the right edge.</li>
+        <li><code>test_thumbnail_cache.py</code> — cache key collisions, mtime invalidation, size-bucket selection, eviction.</li>
+      </ul>
+
+      <h3 style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:var(--vermillion); margin:18px 0 6px;">Integration · src/integrationtest/python/</h3>
+      <ul>
+        <li>Toggle modes via command, verify cursor + selection preserved.</li>
+        <li><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>Ctrl</kbd>+<kbd>−</kbd> step, clamping at min/max, <kbd>Ctrl</kbd>+<kbd>0</kbd> reset.</li>
+        <li>Image file shows overlays; non-image file does not.</li>
+        <li>Persistence: set gallery + tile 240 px, restart, verify restored.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ────────── 10 File touch list ────────── -->
+  <section>
+    <aside class="marginalia">
+      <div class="num">10</div>
+      <div class="label">Files</div>
+      <p class="note">Two new modules. Three edits.</p>
+    </aside>
+    <div class="content">
+      <h2>File touch list.</h2>
+      <div class="files">
+        <div class="file-col new">
+          <h4>New <span class="badge">+ create</span></h4>
+          <ul>
+            <li>src/main/python/fman/impl/view/gallery.py</li>
+            <li>src/main/python/fman/impl/view/thumbnails.py</li>
+            <li>src/unittest/python/fman_unittest/impl/view/test_gallery_filename_truncation.py</li>
+            <li>src/unittest/python/fman_unittest/impl/view/test_gallery_overlay_layout.py</li>
+            <li>src/unittest/python/fman_unittest/impl/view/test_thumbnail_cache.py</li>
+            <li>src/integrationtest/python/fman_integrationtest/plugin_tests/test_gallery_view.py</li>
+          </ul>
+        </div>
+        <div class="file-col mod">
+          <h4>Modified <span class="badge">~ edit</span></h4>
+          <ul>
+            <li>src/main/python/fman/impl/widgets.py
+              <div style="font-family:'EB Garamond',serif; font-size:13px; color:var(--ink-faint); padding-top:4px; padding-left:0;">Wrap views in <code>QStackedWidget</code>, add <code>set_view_mode</code> / <code>get_view_mode</code>.</div>
+            </li>
+            <li>src/main/python/fman/impl/session.py
+              <div style="font-family:'EB Garamond',serif; font-size:13px; color:var(--ink-faint); padding-top:4px; padding-left:0;">Persist view mode + tile size per pane.</div>
+            </li>
+            <li>Core plugin command registry
+              <div style="font-family:'EB Garamond',serif; font-size:13px; color:var(--ink-faint); padding-top:4px; padding-left:0;">Register <code>toggle_gallery_view</code> + default <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>G</kbd> binding.</div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="colophon">
+    <div class="left">fman &middot; design specification</div>
+    <div class="center">— end of document —</div>
+    <div class="right">v.1 &middot; 2026·05·11</div>
+  </footer>
+
+</div>
+</body>
+</html>

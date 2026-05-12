@@ -4,12 +4,14 @@
 
 An opinionated dual-pane file manager for macOS, forked from [fman](https://github.com/fman-users/fman).
 
-This is a personal rework targeting macOS as the primary platform. While the cross-platform codebase (Windows, Linux) is preserved, development and testing focus on macOS with Python 3.14.
-
+Python 3.9 or later is required (tested up to Python 3.14).This is a personal rework targeting macOS as the primary platform. While the cross-platform codebase (Windows, Linux) is preserved, development and testing focus on macOS with Python 3.14.
 ## What changed from fman
 
-### New features
-
+    pip install -Ur requirements/mac.txt      # macOS
+    pip install -Ur requirements/ubuntu.txt    # Ubuntu/Debian
+    pip install -Ur requirements/arch.txt      # Arch Linux
+    pip install -Ur requirements/fedora.txt    # Fedora
+    pip install -Ur requirements/windows.txt   # Windows### New features
 - **Settings panel (Cmd+,)** — centralized preferences replacing scattered dialog popups. Font family, font size, hidden files toggle, parent directory entry, and external tool configuration in one place.
 - **Theme editor** — visual color customization with 21 color pickers, live preview, save/load named themes, import/export `.fman-theme` files. Integrates with FmanAlternativeColors plugin for seamless theme switching.
 - **File preview (F3 / Cmd+Y)** — preview text, images (PNG, JPG, GIF, BMP, SVG, WEBP, AVIF), PDFs, and directory stats in the opposite pane. Live updates as you navigate.
@@ -26,7 +28,6 @@ This is a personal rework targeting macOS as the primary platform. While the cro
 - **Bundle size** — stripped unused Qt frameworks and boto3 from frozen app
 - **Security** — Apple credentials moved to environment variables
 - **Filter robustness** — `remove_filter` no longer crashes on missing filter; `..` entries immune to all filters at model level
-
 ### Architecture changes
 
 - Core Python package renamed from `fman` to `vitraj`
@@ -118,14 +119,16 @@ Both are included in `requirements/base.txt`. The app works without them — pre
 | F7 | Create directory |
 | F8 | Move to trash |
 | Escape | Close active panel |
-
 ## Key dependencies
 
 | Package | Version | Notes |
 |---------|---------|-------|
 | PyQt5 | 5.15.11 | GUI framework |
 | PyInstaller | 6.19.0 | App freezing/compilation |
-| PyMuPDF | 1.27.2.2 | PDF preview (optional) |
+| pyobjc-core | 12.1 | macOS Objective-C bridge |
+| fbs | 0.9.4 | Build system |
+
+See `requirements/` for the full list per platform.| PyMuPDF | 1.27.2.2 | PDF preview (optional) |
 | Pillow | 11.2.1 | AVIF support (optional) |
 | pyobjc-core | 12.1 | macOS Objective-C bridge |
 | fbs | 0.9.4 | [Build system](https://build-system.fman.io/) |

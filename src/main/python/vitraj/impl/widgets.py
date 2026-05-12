@@ -1,5 +1,5 @@
 from fbs_runtime.platform import is_windows, is_mac
-from vitraj import OK
+from vitraj import DATA_DIRECTORY, OK
 from vitraj.impl.model import SortedFileSystemModel
 from vitraj.impl.quicksearch import Quicksearch
 from vitraj.impl.util.qt import disable_window_animations_mac, Key_Escape, \
@@ -7,16 +7,27 @@ from vitraj.impl.util.qt import disable_window_animations_mac, Key_Escape, \
 from vitraj.impl.util.qt.thread import run_in_main_thread
 from vitraj.impl.view.location_bar import LocationBar
 from vitraj.impl.view import FileListView, Layout, set_selection
+from vitraj.impl.view.gallery import GalleryView, GalleryItemDelegate
+from vitraj.impl.view.thumbnails import ThumbnailCache
 from vitraj.url import as_human_readable, basename
+from os.path import join
 from PyQt5.QtCore import pyqtSignal, QTimer, Qt, QEvent, QSize
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QWidget, QMainWindow, QSplitter, QStatusBar, \
 	QMessageBox, QInputDialog, QLineEdit, QFileDialog, QLabel, QDialog, \
 	QHBoxLayout, QPushButton, QVBoxLayout, QSplitterHandle, QApplication, \
-	QFrame, QAction, QSizePolicy, QProgressDialog, QProgressBar
+	QFrame, QAction, QSizePolicy, QProgressDialog, QProgressBar, QStackedWidget
 from random import randint, randrange
 
 import re
+
+VIEW_MODE_LIST = 'list'
+VIEW_MODE_GALLERY = 'gallery'
+VIEW_MODES = (VIEW_MODE_LIST, VIEW_MODE_GALLERY)
+# Thumbnail-completion repaint coalescing window (ms). Without this, a burst
+# of finished thumbnails would each trigger a full viewport repaint, causing
+# O(N²) work when many tiles complete back-to-back.
+_THUMBNAIL_REPAINT_DEBOUNCE_MS = 16
 
 class Application(QApplication):
 	def __init__(self, *args, **kwargs):
@@ -58,7 +69,36 @@ class DirectoryPaneWidget(QWidget):
 		self._file_view.setModel(self._model)
 		self._file_view.doubleClicked.connect(self._on_doubleclicked)
 		self._file_view.key_press_event_filter = self._on_key_pressed
-		self.setLayout(Layout(self._location_bar, self._file_view))
+
+		self._thumbnail_cache = ThumbnailCache(
+			join(DATA_DIRECTORY, 'Local', 'Cache', 'Thumbnails'), parent=self
+		)
+		self._gallery_view = GalleryView(self)
+		self._gallery_view.setModel(self._model)
+		self._gallery_view.setSelectionModel(self._file_view.selectionModel())
+		self._gallery_view.setItemDelegate(GalleryItemDelegate(
+			get_model_url=self._model.url,
+			get_thumbnail_cache=lambda: self._thumbnail_cache,
+			parent=self._gallery_view,
+		))
+		self._gallery_view.doubleClicked.connect(self._on_doubleclicked)
+		self._gallery_view.key_press_event_filter = self._on_key_pressed
+		self._gallery_view._get_context_menu = \
+			lambda *args: controller.on_context_menu(self, *args)
+		self._thumbnail_repaint_timer = QTimer(self)
+		self._thumbnail_repaint_timer.setSingleShot(True)
+		self._thumbnail_repaint_timer.timeout.connect(
+			self._gallery_view.viewport().update
+		)
+		self._thumbnail_cache.thumbnail_ready.connect(
+			self._schedule_thumbnail_repaint
+		)
+
+		self._view_stack = QStackedWidget(self)
+		self._view_stack.addWidget(self._file_view)
+		self._view_stack.addWidget(self._gallery_view)
+
+		self.setLayout(Layout(self._location_bar, self._view_stack))
 		self._location_bar.setFocusProxy(self._file_view)
 		self.setFocusProxy(self._file_view)
 		self._controller = controller
@@ -166,6 +206,38 @@ class DirectoryPaneWidget(QWidget):
 			)
 		for i, width in enumerate(column_widths):
 			self._file_view.setColumnWidth(i, width)
+	@run_in_main_thread
+	def set_view_mode(self, mode):
+		"""Switch between ``VIEW_MODE_LIST`` and ``VIEW_MODE_GALLERY``."""
+		if mode == VIEW_MODE_LIST:
+			target = self._file_view
+		elif mode == VIEW_MODE_GALLERY:
+			target = self._gallery_view
+		else:
+			raise ValueError('Unknown view mode: %r' % mode)
+		if self._view_stack.currentWidget() is target:
+			return
+		self._view_stack.setCurrentWidget(target)
+		self.setFocusProxy(target)
+		self.focus()
+	def get_view_mode(self):
+		if self._view_stack.currentWidget() is self._gallery_view:
+			return VIEW_MODE_GALLERY
+		return VIEW_MODE_LIST
+	def toggle_view_mode(self):
+		next_mode = (
+			VIEW_MODE_LIST if self.get_view_mode() == VIEW_MODE_GALLERY
+			else VIEW_MODE_GALLERY
+		)
+		self.set_view_mode(next_mode)
+	@run_in_main_thread
+	def set_gallery_tile_size(self, px):
+		self._gallery_view.set_tile_size(px)
+	def get_gallery_tile_size(self):
+		return self._gallery_view.get_tile_size()
+	def _schedule_thumbnail_repaint(self, _path):
+		if not self._thumbnail_repaint_timer.isActive():
+			self._thumbnail_repaint_timer.start(_THUMBNAIL_REPAINT_DEBOUNCE_MS)
 	def _on_doubleclicked(self, index):
 		self._controller.on_doubleclicked(self, self._model.url(index))
 	def _on_key_pressed(self, event):
