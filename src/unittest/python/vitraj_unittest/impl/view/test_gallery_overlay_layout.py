@@ -1,4 +1,4 @@
-from fman.impl.view.gallery import (
+from vitraj.impl.view.gallery import (
 	pick_overlay_layout, STACK_BREAKPOINT_PX, SPREAD, STACKED
 )
 from unittest import TestCase

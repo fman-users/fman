@@ -1,19 +1,5 @@
 from fbs_runtime.platform import is_windows, is_mac
-<<<<<<< HEAD:src/main/python/fman/impl/widgets.py
-from fman import DATA_DIRECTORY, OK
-from fman.impl.model import SortedFileSystemModel
-from fman.impl.quicksearch import Quicksearch
-from fman.impl.util.qt import disable_window_animations_mac, Key_Escape, \
-	NoFocus, Key_Backspace, DisplayRole
-from fman.impl.util.qt.thread import run_in_main_thread
-from fman.impl.view.location_bar import LocationBar
-from fman.impl.view import FileListView, Layout, set_selection
-from fman.impl.view.gallery import GalleryView, GalleryItemDelegate
-from fman.impl.view.thumbnails import ThumbnailCache
-from fman.url import as_human_readable, basename
-from os.path import join
-=======
-from vitraj import OK
+from vitraj import DATA_DIRECTORY, OK
 from vitraj.impl.model import SortedFileSystemModel
 from vitraj.impl.quicksearch import Quicksearch
 from vitraj.impl.util.qt import disable_window_animations_mac, Key_Escape, \
@@ -21,8 +7,10 @@ from vitraj.impl.util.qt import disable_window_animations_mac, Key_Escape, \
 from vitraj.impl.util.qt.thread import run_in_main_thread
 from vitraj.impl.view.location_bar import LocationBar
 from vitraj.impl.view import FileListView, Layout, set_selection
+from vitraj.impl.view.gallery import GalleryView, GalleryItemDelegate
+from vitraj.impl.view.thumbnails import ThumbnailCache
 from vitraj.url import as_human_readable, basename
->>>>>>> origin/main:src/main/python/vitraj/impl/widgets.py
+from os.path import join
 from PyQt5.QtCore import pyqtSignal, QTimer, Qt, QEvent, QSize
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QWidget, QMainWindow, QSplitter, QStatusBar, \

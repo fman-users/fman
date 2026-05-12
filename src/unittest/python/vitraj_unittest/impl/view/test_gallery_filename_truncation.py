@@ -1,4 +1,4 @@
-from fman.impl.view.gallery import truncate_filename
+from vitraj.impl.view.gallery import truncate_filename
 from unittest import TestCase
 
 

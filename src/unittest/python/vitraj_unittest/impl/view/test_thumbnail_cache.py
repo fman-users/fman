@@ -1,4 +1,4 @@
-from fman.impl.view.thumbnails import format_human_size
+from vitraj.impl.view.thumbnails import format_human_size
 from unittest import TestCase
 
 
@@ -22,7 +22,7 @@ class FormatHumanSizeTest(TestCase):
 		self.assertEqual('1.0 MB', format_human_size(1024 * 1024))
 
 
-from fman.impl.view.thumbnails import (
+from vitraj.impl.view.thumbnails import (
 	cache_key, pick_size_bucket, SIZE_BUCKETS
 )
 
@@ -76,7 +76,7 @@ class PickSizeBucketTest(TestCase):
 
 import os
 import tempfile
-from fman.impl.view.thumbnails import ThumbnailCache
+from vitraj.impl.view.thumbnails import ThumbnailCache
 
 
 class ThumbnailCacheDiskTest(TestCase):
@@ -130,7 +130,7 @@ class ThumbnailCacheFailedImageTest(TestCase):
 		self._tmp.cleanup()
 
 	def test_failed_image_is_remembered(self):
-		from fman.impl.view.thumbnails import cache_key, pick_size_bucket
+		from vitraj.impl.view.thumbnails import cache_key, pick_size_bucket
 		cache = ThumbnailCache(self.cache_dir)
 		mtime_ns = os.stat(self.bad_path).st_mtime_ns
 		bucket = pick_size_bucket(128)

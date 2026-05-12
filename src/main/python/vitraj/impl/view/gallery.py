@@ -18,10 +18,10 @@ from PyQt5.QtWidgets import (
 	QAbstractItemView, QAction, QListView, QStyle, QStyledItemDelegate
 )
 
-from fman.impl.util.qt import AltModifier, ControlModifier, CopyAction, \
+from vitraj.impl.util.qt import AltModifier, ControlModifier, CopyAction, \
 	MoveAction, NoButton
-from fman.impl.view.thumbnails import format_human_size
-from fman.url import as_human_readable, splitscheme
+from vitraj.impl.view.thumbnails import format_human_size
+from vitraj.url import as_human_readable, splitscheme
 
 
 ELLIPSIS = '…'
@@ -192,7 +192,7 @@ class GalleryView(QListView):
 			return
 		# Lazy import: ``fman.impl.view`` indirectly imports this module via
 		# widgets.py during app startup.
-		from fman.impl.view import Menu
+		from vitraj.impl.view import Menu
 		index = self.indexAt(event.pos())
 		updated_selection = False
 		if index.isValid():

@@ -1,15 +1,9 @@
 from base64 import b64encode, b64decode
 from concurrent.futures import ThreadPoolExecutor
-<<<<<<< HEAD:src/main/python/fman/impl/session.py
-from fman.impl.util.path import make_absolute
-from fman.impl.util.url import get_existing_pardir
-from fman.impl.widgets import VIEW_MODES
-from fman.url import as_url, dirname, as_human_readable
-=======
 from vitraj.impl.util.path import make_absolute
 from vitraj.impl.util.url import get_existing_pardir
+from vitraj.impl.widgets import VIEW_MODES
 from vitraj.url import as_url, dirname, as_human_readable
->>>>>>> origin/main:src/main/python/vitraj/impl/session.py
 from os import getcwd
 from os.path import expanduser
 from pathlib import Path

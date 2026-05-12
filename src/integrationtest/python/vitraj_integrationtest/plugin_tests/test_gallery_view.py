@@ -16,8 +16,8 @@ and ``get_gallery_tile_size``/``set_gallery_tile_size``) and the tile-
 size clamping from ``fman.impl.view.gallery``.
 """
 
-from fman_integrationtest.plugin_tests import PluginTest
-from fman.impl.view.gallery import (
+from vitraj_integrationtest.plugin_tests import PluginTest
+from vitraj.impl.view.gallery import (
 	DEFAULT_TILE_SIZE_PX, MIN_TILE_SIZE_PX, MAX_TILE_SIZE_PX,
 )
 
