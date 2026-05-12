@@ -66,7 +66,7 @@ def _lru_set(od, key, value, cap):
 class _GeneratorSignals(QObject):
 	generated = pyqtSignal(str, object)  # (cache_key, QImage or None)
 	disk_loaded = pyqtSignal(str, object)  # (cache_key, QPixmap or None)
-	resolution_read = pyqtSignal(str, object)  # (cache_key, QSize or None)
+	resolution_read = pyqtSignal(object, object)  # ((path, mtime_ns), QSize or None)
 
 
 class _Generator(QRunnable):
@@ -116,19 +116,18 @@ class _DiskLoader(QRunnable):
 class _ResolutionReader(QRunnable):
 	"""Read image resolution off the UI thread."""
 
-	def __init__(self, cache_key, path, mtime_ns, signals):
+	def __init__(self, key, path, signals):
 		super().__init__()
-		self._cache_key = cache_key
+		self._key = key
 		self._path = path
-		self._mtime_ns = mtime_ns
 		self._signals = signals
 
 	def run(self):
 		size = QImageReader(self._path).size()
 		if not size.isValid():
-			self._signals.resolution_read.emit(self._cache_key, None)
+			self._signals.resolution_read.emit(self._key, None)
 		else:
-			self._signals.resolution_read.emit(self._cache_key, size)
+			self._signals.resolution_read.emit(self._key, size)
 
 
 class ThumbnailCache(QObject):
@@ -152,19 +151,19 @@ class ThumbnailCache(QObject):
 		self._mem_pixmaps = OrderedDict()    # key -> QPixmap (LRU)
 		self._stats = OrderedDict()          # path -> (mtime_ns, size_bytes)
 		self._resolutions = OrderedDict()    # (path, mtime_ns) -> QSize
-		self._pending = set()                # keys currently generating
 		# Keys whose generator emitted (key, None). Without this, paint
 		# events would re-schedule generation forever for unreadable images.
 		self._failed = OrderedDict()
-		self._pending_disk = set()           # keys currently loading from disk
-		self._pending_resolutions = set()    # cache keys for pending resolutions
+		# In-flight work; presence implies pending. Stored values are the
+		# context needed to finalize on the signal callback.
+		self._generator_for = {}   # key -> (path, mtime_ns, bucket)
+		self._disk_load_for = {}   # key -> path
+		self._pending_resolutions = set()  # (path, mtime_ns)
 		self._signals = _GeneratorSignals()
 		self._signals.generated.connect(self._on_generated)
 		self._signals.disk_loaded.connect(self._on_disk_loaded)
 		self._signals.resolution_read.connect(self._on_resolution_read)
 		self._pool = QThreadPool.globalInstance()
-		self._key_for = {}   # key -> (path, mtime_ns, bucket); cleared on emit
-		self._resolution_for = {}  # cache_key -> (path, mtime_ns); cleared on emit
 
 	# ------------------------------------------------------------------ public
 	def get(self, absolute_path, requested_px):
@@ -179,12 +178,16 @@ class ThumbnailCache(QObject):
 		if pix is not None:
 			self._mem_pixmaps.move_to_end(key)
 			return pix
-		# Pixmap not in memory. Schedule async disk load if not already pending.
-		if key not in self._pending_disk and key not in self._failed:
-			self._pending_disk.add(key)
-			self._key_for[key] = (absolute_path, mtime_ns, bucket)
-			disk = self._disk_path(absolute_path, mtime_ns, bucket)
-			self._pool.start(_DiskLoader(key, disk, self._signals))
+		if key in self._disk_load_for or key in self._failed:
+			return None
+		# Only schedule a disk load if the file actually exists — otherwise
+		# request() handles generation. Stat is microseconds; the decode is
+		# 200-500ms, which is what we moved to the worker thread.
+		disk = self._disk_path(absolute_path, mtime_ns, bucket)
+		if not os.path.exists(disk):
+			return None
+		self._disk_load_for[key] = absolute_path
+		self._pool.start(_DiskLoader(key, disk, self._signals))
 		return None
 
 	def request(self, absolute_path, requested_px):
@@ -197,12 +200,12 @@ class ThumbnailCache(QObject):
 		key = cache_key(absolute_path, mtime_ns, bucket)
 		if (
 			key in self._mem_pixmaps
-			or key in self._pending
+			or key in self._generator_for
+			or key in self._disk_load_for
 			or key in self._failed
 		):
 			return
-		self._pending.add(key)
-		self._key_for[key] = (absolute_path, mtime_ns, bucket)
+		self._generator_for[key] = (absolute_path, mtime_ns, bucket)
 		self._pool.start(_Generator(key, absolute_path, bucket, self._signals))
 
 	def get_resolution(self, absolute_path):
@@ -216,13 +219,9 @@ class ThumbnailCache(QObject):
 		if cached is not None:
 			self._resolutions.move_to_end(cache_k)
 			return cached
-		# Resolution not cached. Schedule async read if not already pending.
-		# Use a string key for pending tracking.
-		key = '%s|%d' % (absolute_path, mtime_ns)
-		if key not in self._pending_resolutions:
-			self._pending_resolutions.add(key)
-			self._resolution_for[key] = (absolute_path, mtime_ns)
-			self._pool.start(_ResolutionReader(key, absolute_path, mtime_ns, self._signals))
+		if cache_k not in self._pending_resolutions:
+			self._pending_resolutions.add(cache_k)
+			self._pool.start(_ResolutionReader(cache_k, absolute_path, self._signals))
 		return None
 
 	def get_size_bytes(self, absolute_path):
@@ -252,17 +251,13 @@ class ThumbnailCache(QObject):
 		return os.path.join(self._cache_dir, str(size_bucket), key + '.png')
 
 	def _on_generated(self, key, image):
-		self._pending.discard(key)
+		entry = self._generator_for.pop(key, None)
 		if image is None or image.isNull():
-			# Remember the failure so future request(...) calls don't
-			# re-schedule generation, and drop the lookup entry to avoid
-			# a memory leak per failed image.
 			_lru_set(self._failed, key, True, _MAX_FAILED)
-			self._key_for.pop(key, None)
 			return
-		path, mtime_ns, bucket = self._key_for.pop(key, (None, None, None))
-		if path is None:
+		if entry is None:
 			return
+		path, mtime_ns, bucket = entry
 		pix = QPixmap.fromImage(image)
 		_lru_set(self._mem_pixmaps, key, pix, _MAX_PIXMAPS)
 		try:
@@ -272,29 +267,19 @@ class ThumbnailCache(QObject):
 		self.thumbnail_ready.emit(path)
 
 	def _on_disk_loaded(self, key, pix):
-		self._pending_disk.discard(key)
-		if pix is None or pix.isNull():
-			# Mark as failed so we don't retry forever.
-			_lru_set(self._failed, key, True, _MAX_FAILED)
-			self._key_for.pop(key, None)
-			return
-		path, mtime_ns, bucket = self._key_for.pop(key, (None, None, None))
-		if path is None:
+		# A null pixmap here means the disk file existed but was unreadable
+		# (corrupt PNG). Do NOT mark _failed — generation can still recover
+		# and will overwrite the bad file. Caller's next request() handles it.
+		path = self._disk_load_for.pop(key, None)
+		if path is None or pix is None or pix.isNull():
 			return
 		_lru_set(self._mem_pixmaps, key, pix, _MAX_PIXMAPS)
-		# Emit thumbnail_ready to trigger repaint of the affected tile.
 		self.thumbnail_ready.emit(path)
 
-	def _on_resolution_read(self, key, size):
-		self._pending_resolutions.discard(key)
+	def _on_resolution_read(self, cache_k, size):
+		self._pending_resolutions.discard(cache_k)
 		if size is None or not size.isValid():
-			# Resolution unreadable; don't cache it.
-			self._resolution_for.pop(key, None)
 			return
-		path, mtime_ns = self._resolution_for.pop(key, (None, None))
-		if path is None:
-			return
-		cache_k = (path, mtime_ns)
 		_lru_set(self._resolutions, cache_k, size, _MAX_RESOLUTIONS)
-		# Emit thumbnail_ready to trigger repaint and display the resolution overlay.
+		path, _ = cache_k
 		self.thumbnail_ready.emit(path)

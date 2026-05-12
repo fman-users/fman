@@ -136,27 +136,24 @@ class ThumbnailCacheFailedImageTest(TestCase):
 		bucket = pick_size_bucket(128)
 		key = cache_key(self.bad_path, mtime_ns, bucket)
 		# Pretend the generator was scheduled.
-		cache._pending.add(key)
-		cache._key_for[key] = (self.bad_path, mtime_ns, bucket)
+		cache._generator_for[key] = (self.bad_path, mtime_ns, bucket)
 		# Simulate the worker reporting that decoding failed:
 		cache._on_generated(key, None)
 		self.assertIn(key, cache._failed)
-		self.assertNotIn(key, cache._key_for)
-		self.assertNotIn(key, cache._pending)
+		self.assertNotIn(key, cache._generator_for)
 
 	def test_request_skips_failed_keys(self):
-		# After a failure, request(...) must not re-add the key to
-		# _pending - otherwise paint events would re-schedule on every
-		# frame.
+		# After a failure, request(...) must not re-schedule generation -
+		# otherwise paint events would re-schedule on every frame.
 		cache = ThumbnailCache(self.cache_dir)
-		# Trigger one request which marks _pending, then mark it failed:
+		# Trigger one request which schedules generation, then mark it failed:
 		cache.request(self.bad_path, 128)
 		# Drain to failure synchronously by replicating what the worker
 		# emits for a null image.
-		key = next(iter(cache._pending))
+		key = next(iter(cache._generator_for))
 		cache._on_generated(key, None)
 		self.assertIn(key, cache._failed)
 		# A subsequent paint cycle would call request again. It must not
-		# re-add the key to _pending.
+		# re-schedule generation.
 		cache.request(self.bad_path, 128)
-		self.assertNotIn(key, cache._pending)
+		self.assertNotIn(key, cache._generator_for)
