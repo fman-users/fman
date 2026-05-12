@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.7.5). Must already exist on a commit.'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -Ur requirements/mac.txt
+
+      - name: Pin release version in base.json
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+          version = os.environ['VERSION']
+          p = pathlib.Path('src/build/settings/base.json')
+          data = json.loads(p.read_text())
+          data['version'] = version
+          p.write_text(json.dumps(data, indent='\t') + '\n')
+          print(f'base.json version set to {version}')
+          PY
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+
+      - name: Freeze app
+        run: python build.py freeze
+
+      - name: Build DMG
+        run: python src/build/create_dmg.py
+
+      - name: Verify DMG
+        run: |
+          test -f target/vitraj.dmg
+          ls -lh target/vitraj.dmg
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" target/vitraj.dmg --clobber
+          else
+            gh release create "$TAG" target/vitraj.dmg \
+              --title "$TAG" \
+              --generate-notes
+          fi
