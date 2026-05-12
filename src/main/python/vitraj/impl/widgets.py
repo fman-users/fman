@@ -6,7 +6,7 @@ from vitraj.impl.util.qt import disable_window_animations_mac, Key_Escape, \
 	NoFocus, Key_Backspace, DisplayRole
 from vitraj.impl.util.qt.thread import run_in_main_thread
 from vitraj.impl.view.location_bar import LocationBar
-from vitraj.impl.view import FileListView, Layout, set_selection
+from vitraj.impl.view import FileListView, set_selection
 from vitraj.impl.view.gallery import GalleryView, GalleryItemDelegate
 from vitraj.impl.view.thumbnails import ThumbnailCache
 from vitraj.url import as_human_readable, basename
@@ -16,7 +16,7 @@ from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QWidget, QMainWindow, QSplitter, QStatusBar, \
 	QMessageBox, QInputDialog, QLineEdit, QFileDialog, QLabel, QDialog, \
 	QHBoxLayout, QPushButton, QVBoxLayout, QSplitterHandle, QApplication, \
-	QFrame, QAction, QSizePolicy, QProgressDialog, QProgressBar, QStackedWidget
+	QFrame, QAction, QSizePolicy, QProgressDialog, QProgressBar
 from random import randint, randrange
 
 import re
@@ -57,7 +57,7 @@ class DirectoryPaneWidget(QWidget):
 	location_changed = pyqtSignal(QWidget)
 	location_bar_clicked = pyqtSignal(QWidget)
 
-	def __init__(self, fs, null_location, parent, controller):
+	def __init__(self, fs, null_location, parent, controller, thumbnail_cache):
 		super().__init__(parent)
 		self._location_bar = LocationBar(self)
 		self._model = SortedFileSystemModel(self, fs, null_location)
@@ -70,10 +70,11 @@ class DirectoryPaneWidget(QWidget):
 		self._file_view.doubleClicked.connect(self._on_doubleclicked)
 		self._file_view.key_press_event_filter = self._on_key_pressed
 
-		self._thumbnail_cache = ThumbnailCache(
-			join(DATA_DIRECTORY, 'Local', 'Cache', 'Thumbnails'), parent=self
+		self._thumbnail_cache = thumbnail_cache
+		self._gallery_view = GalleryView(
+			self,
+			get_context_menu=lambda *args: controller.on_context_menu(self, *args)
 		)
-		self._gallery_view = GalleryView(self)
 		self._gallery_view.setModel(self._model)
 		self._gallery_view.setSelectionModel(self._file_view.selectionModel())
 		self._gallery_view.setItemDelegate(GalleryItemDelegate(
@@ -83,8 +84,6 @@ class DirectoryPaneWidget(QWidget):
 		))
 		self._gallery_view.doubleClicked.connect(self._on_doubleclicked)
 		self._gallery_view.key_press_event_filter = self._on_key_pressed
-		self._gallery_view._get_context_menu = \
-			lambda *args: controller.on_context_menu(self, *args)
 		self._thumbnail_repaint_timer = QTimer(self)
 		self._thumbnail_repaint_timer.setSingleShot(True)
 		self._thumbnail_repaint_timer.timeout.connect(
@@ -94,11 +93,14 @@ class DirectoryPaneWidget(QWidget):
 			self._schedule_thumbnail_repaint
 		)
 
-		self._view_stack = QStackedWidget(self)
-		self._view_stack.addWidget(self._file_view)
-		self._view_stack.addWidget(self._gallery_view)
-
-		self.setLayout(Layout(self._location_bar, self._view_stack))
+		self._gallery_view.hide()
+		layout = QVBoxLayout()
+		layout.addWidget(self._location_bar)
+		layout.addWidget(self._file_view)
+		layout.addWidget(self._gallery_view)
+		layout.setContentsMargins(0, 0, 0, 0)
+		layout.setSpacing(0)
+		self.setLayout(layout)
 		self._location_bar.setFocusProxy(self._file_view)
 		self.setFocusProxy(self._file_view)
 		self._controller = controller
@@ -210,18 +212,19 @@ class DirectoryPaneWidget(QWidget):
 	def set_view_mode(self, mode):
 		"""Switch between ``VIEW_MODE_LIST`` and ``VIEW_MODE_GALLERY``."""
 		if mode == VIEW_MODE_LIST:
-			target = self._file_view
+			target, other = self._file_view, self._gallery_view
 		elif mode == VIEW_MODE_GALLERY:
-			target = self._gallery_view
+			target, other = self._gallery_view, self._file_view
 		else:
 			raise ValueError('Unknown view mode: %r' % mode)
-		if self._view_stack.currentWidget() is target:
+		if target.isVisible():
 			return
-		self._view_stack.setCurrentWidget(target)
+		other.hide()
+		target.show()
 		self.setFocusProxy(target)
 		self.focus()
 	def get_view_mode(self):
-		if self._view_stack.currentWidget() is self._gallery_view:
+		if self._gallery_view.isVisible():
 			return VIEW_MODE_GALLERY
 		return VIEW_MODE_LIST
 	def toggle_view_mode(self):
@@ -236,6 +239,11 @@ class DirectoryPaneWidget(QWidget):
 	def get_gallery_tile_size(self):
 		return self._gallery_view.get_tile_size()
 	def _schedule_thumbnail_repaint(self, _path):
+		# Cache is app-global; the signal fans out to every pane. Skip the
+		# repaint when this pane isn't showing the gallery — the hidden
+		# view would be repainted for nothing.
+		if not self._gallery_view.isVisible():
+			return
 		if not self._thumbnail_repaint_timer.isActive():
 			self._thumbnail_repaint_timer.start(_THUMBNAIL_REPAINT_DEBOUNCE_MS)
 	def _on_doubleclicked(self, index):
@@ -441,6 +449,11 @@ class MainWindow(QMainWindow):
 		self._null_location = null_location
 		self._panes = []
 		self._panel_manager = PanelManager()
+		# One ThumbnailCache shared across all panes — left + right panes
+		# browsing the same directory would otherwise decode every image twice.
+		self._thumbnail_cache = ThumbnailCache(
+			join(DATA_DIRECTORY, 'Local', 'Cache', 'Thumbnails'), parent=self
+		)
 		self._splitter = Splitter(self)
 		self.setCentralWidget(self._splitter)
 		self._status_bar = QStatusBar(self)
@@ -556,7 +569,8 @@ class MainWindow(QMainWindow):
 	@run_in_main_thread
 	def add_pane(self):
 		result = DirectoryPaneWidget(
-			self._fs, self._null_location, self._splitter, self._controller
+			self._fs, self._null_location, self._splitter, self._controller,
+			self._thumbnail_cache
 		)
 		self._panes.append(result)
 		self._splitter.addWidget(result)

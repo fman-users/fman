@@ -152,12 +152,12 @@ class SessionManager:
 				pass
 		if gallery_tile_size:
 			try:
-				pane._widget.set_gallery_tile_size(int(gallery_tile_size))
+				pane.set_gallery_tile_size(int(gallery_tile_size))
 			except (ValueError, TypeError):
 				pass
 		if view_mode in VIEW_MODES:
 			try:
-				pane._widget.set_view_mode(view_mode)
+				pane.set_view_mode(view_mode)
 			except ValueError:
 				pass
 	def _exists_and_is_dir(self, url):

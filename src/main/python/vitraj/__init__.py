@@ -150,6 +150,16 @@ class DirectoryPane:
 		self._widget.set_sort_column(column, ascending)
 	def get_sort_column(self):
 		return self._widget.get_sort_column()
+	def get_view_mode(self):
+		return self._widget.get_view_mode()
+	def set_view_mode(self, mode):
+		self._widget.set_view_mode(mode)
+	def toggle_view_mode(self):
+		self._widget.toggle_view_mode()
+	def get_gallery_tile_size(self):
+		return self._widget.get_gallery_tile_size()
+	def set_gallery_tile_size(self, px):
+		self._widget.set_gallery_tile_size(px)
 	def _has_focus(self):
 		return self._widget.hasFocus()
 	@contextmanager
