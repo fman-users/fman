@@ -6,9 +6,11 @@ top so they can be unit-tested without spinning up a QApplication.
 
 import os
 
-from PyQt5.QtCore import QRect, QRectF, QSize, Qt, pyqtSignal
+from PyQt5.QtCore import (
+	QItemSelectionModel as QISM, QRect, QRectF, QSize, Qt, pyqtSignal
+)
 from PyQt5.QtGui import (
-	QColor, QFontMetrics, QPainter, QPainterPath, QPen
+	QBrush, QColor, QFontMetrics, QPainter, QPainterPath, QPen
 )
 from PyQt5.QtWidgets import QListView, QStyle, QStyledItemDelegate
 
@@ -149,13 +151,57 @@ class GalleryView(ContextMenuMixin, DragAndDrop, QListView):
 		self.setIconSize(QSize(px, px))
 		self.setGridSize(QSize(px + _TILE_PADDING_PX, px + _LABEL_AREA_PX))
 
+	def _handle_arrow_key(self, key, modifiers):
+		model = self.model()
+		if model is None or model.rowCount() == 0:
+			return
+		sm = self.selectionModel()
+		current = sm.currentIndex()
+		if not current.isValid():
+			sm.setCurrentIndex(model.index(0, 0), QISM.NoUpdate)
+			self.scrollTo(sm.currentIndex())
+			return
+		row = current.row()
+		cols = max(1, self.viewport().width() // self.gridSize().width())
+		if key == Qt.Key_Left:
+			new_row = row - 1
+		elif key == Qt.Key_Right:
+			new_row = row + 1
+		elif key == Qt.Key_Up:
+			new_row = row - cols
+		else:  # Key_Down
+			new_row = row + cols
+		new_row = max(0, min(new_row, model.rowCount() - 1))
+		new_index = model.index(new_row, 0)
+		# Match FileListView's convention: plain arrows move the cursor
+		# only (no selection change). Shift+arrows extend selection.
+		# Note: QAbstractItemView.setCurrentIndex() goes through
+		# selectionCommand(), which for ExtendedSelection returns
+		# ClearAndSelect — that would wipe the existing selection. Drive
+		# the selection model directly with NoUpdate to keep selection
+		# intact while moving the cursor.
+		if modifiers & Qt.ShiftModifier:
+			sm.select(new_index, QISM.Select | QISM.Rows)
+		sm.setCurrentIndex(new_index, QISM.NoUpdate)
+		self.scrollTo(new_index)
+
 	def keyPressEvent(self, event):
+		# Arrow keys are owned by the gallery view: handle them before the
+		# pane's key filter so the controller doesn't report them as
+		# "unassigned" shortcuts. In the regular (table) view, arrow keys
+		# are intentionally unassigned because the controller defers to
+		# Qt's own row navigation; here we own the grid layout, so we
+		# implement navigation ourselves.
+		key = event.key()
+		if key in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
+			self._handle_arrow_key(key, event.modifiers())
+			event.accept()
+			return
 		if self.key_press_event_filter(event):
 			return
 		mod = event.modifiers()
 		ctrl_or_cmd = bool(mod & Qt.ControlModifier) or bool(mod & Qt.MetaModifier)
 		if ctrl_or_cmd:
-			key = event.key()
 			current = self.get_tile_size()
 			if key in (Qt.Key_Plus, Qt.Key_Equal):
 				self.set_tile_size(current + TILE_SIZE_STEP_PX)
@@ -195,12 +241,12 @@ class GalleryItemDelegate(QStyledItemDelegate):
 		painter.setRenderHint(QPainter.Antialiasing, True)
 		painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
 
-		opt = option
-		style = opt.widget.style() if opt.widget is not None else None
-		if style is not None:
-			style.drawPrimitive(
-				QStyle.PE_PanelItemViewItem, opt, painter, opt.widget
-			)
+		# QSS doesn't style QListView::item, so the default
+		# PE_PanelItemViewItem call renders nothing here — we draw the
+		# cursor fill explicitly. `cursor_bg` maps to QPalette.Highlight.
+		view = option.widget
+		if view is not None and index == view.currentIndex():
+			painter.fillRect(option.rect, QBrush(option.palette.highlight()))
 
 		tile_rect = option.rect
 		tile_w = tile_rect.width()
@@ -253,7 +299,14 @@ class GalleryItemDelegate(QStyledItemDelegate):
 			tile_w,
 			_LABEL_AREA_PX - _LABEL_GAP_PX,
 		)
-		painter.setPen(QPen(option.palette.text().color()))
+		# Label color: match FileListView's QSS — selected items use
+		# `selected_color` (QPalette.BrightText), unselected use the
+		# default text color.
+		if option.state & QStyle.State_Selected:
+			label_color = option.palette.brightText().color()
+		else:
+			label_color = option.palette.text().color()
+		painter.setPen(QPen(label_color))
 		fm = QFontMetrics(painter.font())
 		avg = max(1, fm.averageCharWidth())
 		max_chars = max(0, label_rect.width() // avg)
