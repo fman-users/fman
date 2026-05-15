@@ -7,14 +7,14 @@ Import developer certificate:
     security import "~/dev/fman/conf/mac/Private key.p12" -k ~/Library/Keychains/login.keychain -P "" -T /usr/bin/codesign
 
 Install a version of XCode that is compatible with your macOS version from
-https://developer.apple.com/download/more/?q=xcode.
+https://developer.apple.com/download/all/?q=xcode.
 
 Code signing usually does not work when invoked via SSH. It prompts for a pw
 with the GUI.
 
 NSIS:
 =====
-Install version 2.51 on Windows.
+Install NSIS 3.x on Windows.
 Add to PATH.
 
 Linux (Ubuntu) extra
@@ -30,10 +30,10 @@ fmanSetup.exe (Google Omaha installer)
 ======================================
 1)
 hammer -c
-set TIMESTAMP_SERVER=http://sha256timestamp.ws.symantec.com/sha256/timestamp
+set TIMESTAMP_SERVER=http://timestamp.digicert.com
 set SHA1_TIMESTAMP_SERVER=%TIMESTAMP_SERVER%
 set SHA2_TIMESTAMP_SERVER=%TIMESTAMP_SERVER%
-set AUTHENTICODE_FILE="c:\Users\Michael\dev\fman\conf\windows\michaelherrmann.pfx"
+set AUTHENTICODE_FILE="<path-to-your-pfx-certificate>"
 set AUTHENTICODE_PASSWORD="..."
 hammer MODE=opt-win --authenticode_file=%AUTHENTICODE_FILE% --authenticode_password=%AUTHENTICODE_PASSWORD% --sha1_authenticode_file=%AUTHENTICODE_FILE% --sha2_authenticode_file=%AUTHENTICODE_FILE% --sha1_authenticode_password=%AUTHENTICODE_PASSWORD% --sha2_authenticode_password=%AUTHENTICODE_PASSWORD%
 

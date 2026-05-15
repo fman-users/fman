@@ -16,8 +16,9 @@ def disable_window_animations_mac(window):
 	# penalties and leads to subtle changes in behaviour. We therefore wait for
 	# the Show event:
 	def eventFilter(target, event):
+		from ctypes import c_void_p
 		from objc import objc_object
-		view = objc_object(c_void_p=int(target.winId()))
+		view = objc_object(c_void_p=c_void_p(int(target.winId())))
 		NSWindowAnimationBehaviorNone = 2
 		view.window().setAnimationBehavior_(NSWindowAnimationBehaviorNone)
 	FilterEventOnce(window, QEvent.Show, eventFilter)

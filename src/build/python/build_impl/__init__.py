@@ -25,7 +25,7 @@ def remove_if_exists(file_path):
 
 def copy_python_library(name, dest_dir):
 	library = import_module(name)
-	is_package = re.match(r'^__init__\.pyc?$', basename(library.__file__))
+	is_package = hasattr(library, '__path__')
 	if is_package:
 		package_dir = dirname(library.__file__)
 		copytree(package_dir, join(dest_dir, basename(package_dir)))
@@ -54,7 +54,7 @@ def upload_file(f, dest_dir, dest_name=None):
 		run(args, check=True)
 	else:
 		if isdir(f):
-			copytree(f, join(dest_dir, dest_name or basename(f)))
+			copytree(f, join(dest_path, dest_name or basename(f)))
 		else:
 			copy(f, dest_path)
 
@@ -79,10 +79,11 @@ def run_on_server(command):
 		return check_output_decode(command, shell=True)
 
 def check_output_decode(*args, **kwargs):
-	return check_output(*args, **kwargs).decode(sys.stdout.encoding)
+	return check_output(*args, **kwargs).decode(sys.stdout.encoding or 'utf-8')
 
 def upload_installer_to_aws(installer_name):
-	assert SETTINGS['release']
+	if not SETTINGS['release']:
+		raise RuntimeError('upload_installer_to_aws called in non-release mode')
 	src_path = path('target/' + installer_name)
 	upload_to_s3(src_path, installer_name)
 	version_dest_path = '%s/%s' % (SETTINGS['version'], installer_name)
@@ -105,7 +106,7 @@ def upload_core_to_github():
 	ssh_key = path('${core_plugin_ssh_key}')
 	if not is_windows():
 		# Prevent clone failing due to lacking access restrictions:
-		run(['chmod', '600', ssh_key])
+		run(['chmod', '600', ssh_key], check=True)
 	with TemporaryDirectory() as tmp_dir:
 		cwd_before = getcwd()
 		chdir(tmp_dir)
@@ -118,7 +119,7 @@ def upload_core_to_github():
 					if not line.startswith('#') and line.rstrip()
 				}
 			for name in listdir(tmp_dir):
-				if name not in extra_files:
+				if name not in extra_files and name != '.git':
 					if isdir(name):
 						rmtree(name)
 					else:
@@ -137,7 +138,7 @@ def upload_core_to_github():
 					'commit', '-m',
 					'Source code of the Core plugin in fman ' + version
 				)
-				git('push', '-u', 'origin', 'master', ssh_key=ssh_key)
+				git('push', '-u', 'origin', 'main', ssh_key=ssh_key)
 			tag = 'v' + version
 			git('tag', tag)
 			git('push', 'origin', tag, ssh_key=ssh_key)
@@ -146,8 +147,11 @@ def upload_core_to_github():
 
 def record_release_on_server():
 	import requests
-	response = requests.post(SETTINGS['record_release_url'], {
+	url = SETTINGS['record_release_url']
+	if not url.startswith('https://'):
+		raise ValueError('record_release_url must use HTTPS')
+	response = requests.post(url, {
 		'secret': SETTINGS['server_api_secret'],
 		'version': SETTINGS['version']
-	})
+	}, timeout=30)
 	response.raise_for_status()

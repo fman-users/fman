@@ -4,5 +4,5 @@
 		"win32com.shell.shellcon", "win32gui", "winpty", "win32wnet"
 	],
 	"windows_sign_pass": "Tu4suttmdpn",
-	"windows_sign_server": "http://sha256timestamp.ws.symantec.com/sha256/timestamp"
+	"windows_sign_server": "http://timestamp.digicert.com"
 }

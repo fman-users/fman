@@ -92,7 +92,10 @@ class DevelopmentApplicationContext(ApplicationContext):
 		if is_mac():
 			self._preload_core_services()
 		if self.updater:
-			self.updater.start()
+			try:
+				self.updater.start()
+			except ImportError:
+				pass
 		if self.is_licensed:
 			if not self.session_manager.was_licensed_on_last_run:
 				self.metrics.track('InstalledLicenseKey')

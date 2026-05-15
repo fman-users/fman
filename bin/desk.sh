@@ -26,7 +26,7 @@ THIS_SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 PROJECT_DIR="$THIS_SCRIPT_DIR/.."
 
 cd "$PROJECT_DIR"
-source venv/bin/activate
+source .venv/bin/activate
 
 PS1="(fman) \h:\W \u\$ "
 

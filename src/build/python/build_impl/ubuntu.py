@@ -26,8 +26,12 @@ def freeze():
 	_remove_gtk_dependencies()
 
 def _remove_gtk_dependencies():
+	import ctypes.util
+	gtk_path = ctypes.util.find_library('gtk-3')
+	if gtk_path is None:
+		return
 	output = check_output_decode(
-		'ldd /usr/lib/x86_64-linux-gnu/libgtk-3.so.0', shell=True
+		'ldd ' + gtk_path, shell=True
 	)
 	assert output.endswith('\n')
 	for line in output.split('\n')[:-1]:
@@ -38,12 +42,7 @@ def _remove_gtk_dependencies():
 			raise ValueError(repr(line))
 		so_name, so_path = match.groups()
 		if so_name and so_path:
-			# libQt5Widgets.so.0 depends on libpng12.so.0. This file is present
-			# on Ubuntu versions < 17.04. On 17.04 (and above?), libpng16.so.0
-			# is used instead. We therefore need to keep libpng12.so.0 so fman
-			# can run on Ubuntu 17.04+:
-			if so_name != 'libpng12.so.0':
-				remove_if_exists(path('${freeze_dir}/' + so_name))
+			remove_if_exists(path('${freeze_dir}/' + so_name))
 
 @command
 def upload():
