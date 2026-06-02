@@ -50,12 +50,13 @@ import logging
 import os
 import sys
 
-# Legacy fman plugin compatibility: alias fman -> vitraj in sys.modules
-# so that `import fman` / `from fman import ...` / `from fman.fs import ...` work.
-sys.modules.setdefault('fman', vitraj)
-sys.modules.setdefault('fman.fs', vitraj.fs)
-sys.modules.setdefault('fman.url', vitraj.url)
-sys.modules.setdefault('fman.clipboard', vitraj.clipboard)
+# Legacy fman plugin compatibility: redirect every `fman[.X]` import to the
+# identical `vitraj[.X]` module via a meta-path finder. A plain sys.modules
+# alias only covers the top-level packages; a deep import such as
+# `from fman.impl.util.qt.thread import ...` would otherwise re-execute the
+# impl tree under the fman name and clobber vitraj.impl. See impl/fman_compat.
+from vitraj.impl import fman_compat
+fman_compat.install()
 
 def get_application_context():
 	return fbs_appctxt.get_application_context(

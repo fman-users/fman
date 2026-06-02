@@ -1,6 +1,9 @@
 from os.path import join, pardir, dirname
 
+import logging
 import sys
+
+_LOG = logging.getLogger(__name__)
 
 class MacUpdater:
 	def __init__(self, app):
@@ -8,16 +11,30 @@ class MacUpdater:
 		self._objc_namespace = dict()
 		self._sparkle = None
 	def start(self):
-		from objc import pathForFramework, loadBundle
-		frameworks_dir = join(dirname(sys.executable), pardir, 'Frameworks')
-		fmwk_path = pathForFramework(join(frameworks_dir, 'Sparkle.framework'))
-		loadBundle('Sparkle', self._objc_namespace, bundle_path=fmwk_path)
+		if not self._load_sparkle():
+			return
 		self.app.aboutToQuit.connect(self._about_to_quit)
 		SUUpdater = self._objc_namespace['SUUpdater']
 		self._sparkle = SUUpdater.sharedUpdater()
 		self._sparkle.setAutomaticallyChecksForUpdates_(True)
 		self._sparkle.setAutomaticallyDownloadsUpdates_(True)
 		self._sparkle.checkForUpdatesInBackground()
+	def _load_sparkle(self):
+		# Sparkle.framework may be missing or built for a different architecture
+		# than the running app (the bundled Sparkle 1.22.0 is x86_64-only, so it
+		# cannot load into an arm64 process). Auto-update is simply unavailable
+		# in that case - degrade gracefully instead of taking down startup.
+		from objc import pathForFramework, loadBundle
+		frameworks_dir = join(dirname(sys.executable), pardir, 'Frameworks')
+		fmwk_path = pathForFramework(join(frameworks_dir, 'Sparkle.framework'))
+		try:
+			loadBundle('Sparkle', self._objc_namespace, bundle_path=fmwk_path)
+		except ImportError as exc:
+			_LOG.warning(
+				'Auto-update disabled: could not load Sparkle.framework (%s)', exc
+			)
+			return False
+		return True
 	def _about_to_quit(self):
 		if self._sparkle.updateInProgress():
 			# Installing the update takes quite some time. Hide the dock icon so

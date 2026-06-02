@@ -59,6 +59,28 @@ class FmanCompatPluginTest(TestCase):
         fs_wrapper = self._mother_fs._children[FmanCompatFS.scheme]
         self.assertIsInstance(fs_wrapper.unwrap(), FmanCompatFS)
 
+    def test_deep_fman_import_does_not_clobber_vitraj_impl(self):
+        """A deep `fman.impl.*` import must not break `vitraj.impl.util.path`.
+
+        Real plugins (e.g. the Search plugin) do
+        `from fman.impl.util.qt.thread import run_in_main_thread`. Before the
+        meta-path shim this re-executed the impl tree under the fman name and
+        clobbered vitraj.impl, so vitraj.url.normalize() crashed with
+        `module 'fman.impl.util' has no attribute 'path'`.
+        """
+        import vitraj
+        import vitraj.url
+        from fman.impl.util.qt.thread import run_in_main_thread  # noqa: F401
+        # The fman submodules must be the *same* objects as vitraj's.
+        self.assertIs(sys.modules['fman'], vitraj)
+        self.assertIs(sys.modules['fman.impl'], vitraj.impl)
+        self.assertEqual('vitraj.impl.util', vitraj.impl.util.__name__)
+        self.assertTrue(hasattr(vitraj.impl.util, 'path'))
+        # The exact call that crashed at startup must now succeed.
+        self.assertEqual(
+            'file:///tmp', vitraj.url.normalize('file:///tmp/../tmp')
+        )
+
     def test_unload_fman_compat_plugin(self):
         """Plugin using legacy fman imports unloads cleanly."""
         self._plugin.load()
@@ -69,14 +91,8 @@ class FmanCompatPluginTest(TestCase):
     def setUp(self):
         super().setUp()
         # Install the fman compatibility shim (mirrors application_context.py)
-        import vitraj
-        import vitraj.fs
-        import vitraj.url
-        import vitraj.clipboard
-        sys.modules.setdefault('fman', vitraj)
-        sys.modules.setdefault('fman.fs', vitraj.fs)
-        sys.modules.setdefault('fman.url', vitraj.url)
-        sys.modules.setdefault('fman.clipboard', vitraj.clipboard)
+        from vitraj.impl import fman_compat
+        fman_compat.install()
 
         self._sys_path_before = list(sys.path)
         self._plugin_dir = get_resource('Fman Compat Plugin')

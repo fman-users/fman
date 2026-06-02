@@ -351,7 +351,10 @@ class ZipFileSystemTest(TestCase):
 				child_contents = self._read_directory(child)
 			else:
 				child_contents = child.read_text()
-			result[child.name] = child_contents
+			# ç can be encoded as U+00E7 or as c + U+0327 (combining cedilla).
+			# Source/zip use the former, but Mac's file system hands back the
+			# latter. Normalize to NFC so comparisons don't spuriously differ.
+			result[normalize('NFC', child.name)] = child_contents
 		return result
 	def _expect_zip_contents(self, contents, zip_file_path):
 		with TemporaryDirectory() as tmp_dir:
