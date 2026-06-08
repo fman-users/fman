@@ -1,4 +1,3 @@
 [
-	{ "keys": ["F3"], "command": "toggle_preview" },
 	{ "keys": ["Cmd+Y"], "command": "toggle_preview" }
 ]
