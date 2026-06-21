@@ -146,7 +146,7 @@ class FileSystem:
 			raise self._operation_not_implemented()
 		return [Task(
 			'Deleting ' + path.rsplit('/', 1)[-1],
-			fn=self.delete, args=(path,), size=1
+			fn=self.move_to_trash, args=(path,), size=1
 		)]
 	def touch(self, path):
 		raise self._operation_not_implemented()

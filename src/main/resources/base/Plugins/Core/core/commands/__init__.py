@@ -17,7 +17,7 @@ from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
 from io import UnsupportedOperation
 from itertools import chain
 from os import strerror
-from os.path import basename, pardir
+from os.path import pardir
 from pathlib import PurePath
 from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QDesktopServices
@@ -1427,6 +1427,8 @@ class InstallPlugin(ApplicationCommand):
 					description=repo.description
 				)
 	def _install_plugin(self, name, zipball_contents):
+		if os.sep in name or '/' in name or '..' in name:
+			raise ValueError('Invalid plugin name: %s' % name)
 		os.makedirs(_THIRDPARTY_PLUGINS_DIR, exist_ok=True)
 		dest_dir = os.path.join(_THIRDPARTY_PLUGINS_DIR, name)
 		dest_dir_url = as_url(dest_dir)
@@ -1730,7 +1732,7 @@ class ArchiveOpenListener(DirectoryPaneListener):
 			except (KeyError, ValueError):
 				return None
 			if scheme == 'file://':
-				new_scheme = _get_handler_for_archive(basename(path))
+				new_scheme = _get_handler_for_archive(basename(url))
 				if new_scheme:
 					try:
 						if is_dir(url):

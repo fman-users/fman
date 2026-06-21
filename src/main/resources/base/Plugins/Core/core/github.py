@@ -73,13 +73,14 @@ def _get_json(url):
 
 def _get(url):
 	try:
-		return urlopen(url).read()
+		with urlopen(url, timeout=30) as resp:
+			return resp.read()
 	except HTTPError:
 		raise
 	except URLError:
 		# Fallback: Some users get "SSL: CERTIFICATE_VERIFY_FAILED" for urlopen.
 		try:
-			response = requests.get(url)
+			response = requests.get(url, timeout=30)
 		except RequestException as e:
 			raise URLError(e.__class__.__name__)
 		if response.status_code != 200:

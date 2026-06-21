@@ -105,7 +105,7 @@ def upload_core_to_github():
 	ssh_key = path('${core_plugin_ssh_key}')
 	if not is_windows():
 		# Prevent clone failing due to lacking access restrictions:
-		run(['chmod', '600', ssh_key])
+		run(['chmod', '600', ssh_key], check=True)
 	with TemporaryDirectory() as tmp_dir:
 		cwd_before = getcwd()
 		chdir(tmp_dir)
@@ -118,7 +118,7 @@ def upload_core_to_github():
 					if not line.startswith('#') and line.rstrip()
 				}
 			for name in listdir(tmp_dir):
-				if name not in extra_files:
+				if name not in extra_files and name != '.git':
 					if isdir(name):
 						rmtree(name)
 					else:
@@ -146,8 +146,11 @@ def upload_core_to_github():
 
 def record_release_on_server():
 	import requests
-	response = requests.post(SETTINGS['record_release_url'], {
+	url = SETTINGS['record_release_url']
+	if not url.startswith('https://'):
+		raise ValueError('record_release_url must use HTTPS')
+	response = requests.post(url, {
 		'secret': SETTINGS['server_api_secret'],
 		'version': SETTINGS['version']
-	})
+	}, timeout=30)
 	response.raise_for_status()
