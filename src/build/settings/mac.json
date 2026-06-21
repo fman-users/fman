@@ -3,11 +3,10 @@
 	"core_plugin_in_freeze_dir": "${freeze_dir}/Contents/Resources/Plugins/Core",
 	"hidden_imports": ["pty"],
 	"mac_bundle_identifier": "io.fman.fman",
+	"mac_codesign_identity": "Developer ID Application: Omaha Consulting",
 	"appcast_url": "${server_url}/updates/Appcast.xml",
 	"info_plist_extra": "<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsArbitraryLoads</key>\n\t\t<true/>\n\t</dict>",
 	"files_to_filter": [
 		"src/freeze/mac/Contents/SharedSupport/bin/fman"
-	],
-	"apple_developer_user": "michael@herrmann.io",
-	"apple_developer_app_pw": "apsy-xzlg-dszl-kttf"
+	]
 }

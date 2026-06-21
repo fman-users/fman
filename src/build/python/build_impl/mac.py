@@ -5,15 +5,11 @@ from fbs.cmdline import command
 from fbs.freeze.mac import freeze_mac
 from glob import glob
 from os import remove
-from os.path import basename, join
+from os.path import basename, isdir, isfile, islink, join
 from shutil import rmtree, move
-from subprocess import run, PIPE, CalledProcessError
-from time import sleep
+from subprocess import run, PIPE
 
 import json
-import os
-import plistlib
-import requests
 
 _UPDATES_DIR = 'updates/mac'
 
@@ -52,6 +48,7 @@ def freeze():
 	)
 
 def _strip_unused_from_bundle():
+	resources = path('${freeze_dir}/Contents/Resources')
 	frameworks = path('${freeze_dir}/Contents/Frameworks')
 	# Remove unused Qt frameworks (fman only uses Core, Gui, Widgets,
 	# MacExtras, PrintSupport, Svg):
@@ -60,8 +57,15 @@ def _strip_unused_from_bundle():
 		'QtQml', 'QtQmlModels', 'QtQuick', 'QtWebSockets'
 	):
 		fw_path = join(qt_lib, unused_fw + '.framework')
-		if os.path.isdir(fw_path):
+		if isdir(fw_path):
 			rmtree(fw_path)
+		# PyInstaller also places top-level symlinks pointing into the
+		# framework. Remove them too; otherwise they dangle and Gatekeeper
+		# rejects the bundle ("invalid destination for symbolic link"):
+		for symlink_dir in (resources, frameworks):
+			symlink = join(symlink_dir, unused_fw)
+			if islink(symlink):
+				remove(symlink)
 	# Remove unused Qt platform plugins:
 	qt_plugins = join(frameworks, 'PyQt5', 'Qt5', 'plugins')
 	for unused_plugin in (
@@ -70,9 +74,9 @@ def _strip_unused_from_bundle():
 		'platformthemes'
 	):
 		p = join(qt_plugins, unused_plugin)
-		if os.path.isdir(p):
+		if isdir(p):
 			rmtree(p)
-		elif os.path.isfile(p):
+		elif isfile(p):
 			remove(p)
 
 @command
@@ -99,50 +103,40 @@ def sign():
 def _run_codesign(*args):
 	run([
 		'codesign', '--verbose',
-		'-s', 'Developer ID Application: Michael Herrmann',
+		'-s', SETTINGS['mac_codesign_identity'],
 	] + list(args), check=True)
 
 def _staple(file_path):
 	run(['xcrun', 'stapler', 'staple', file_path], check=True)
 
-def _notarize(file_path, query_interval_secs=10):
-	response = _run_altool([
-		'--notarize-app', '-t', 'osx', '-f', file_path,
-		'--primary-bundle-id', SETTINGS['mac_bundle_identifier']
-	])
-	request_uuid = response['notarization-upload']['RequestUUID']
-	while True:
-		sleep(query_interval_secs)
-		try:
-			response = _run_altool(['--notarization-info', request_uuid])
-		except CalledProcessError as e:
-			stdout = e.stdout.decode('utf-8')
-			if 'Could not find the RequestUUID' not in stdout:
-				raise
-		else:
-			status = response['notarization-info']['Status']
-			if status != 'in progress':
-				break
-		print('Waiting for notarization to complete...')
-	log_url = response['notarization-info']['LogFileURL']
-	log_response = requests.get(log_url)
-	log_response.raise_for_status()
-	log_json = log_response.json()
-	issues = log_json.get('issues', [])
+def _notarize(file_path):
+	result = _run_notarytool(['submit', file_path, '--wait'])
+	status = result['status']
+	if status != 'Accepted':
+		_print_notarization_issues(result['id'])
+		raise RuntimeError('Unexpected notarization status: %r' % status)
+
+def _print_notarization_issues(submission_id):
+	try:
+		log = _run_notarytool(['log', submission_id])
+	except ValueError:
+		return
+	issues = log.get('issues') or []
 	if issues:
 		print('Notarization encountered some issues:')
 		print(json.dumps(issues, indent=4, sort_keys=True))
-	if status != 'success':
-		raise RuntimeError('Unexpected notarization status: %r' % status)
 
-def _run_altool(args):
+def _run_notarytool(args):
 	all_args = [
-		'xcrun', 'altool', '--output-format', 'xml',
-		'-u', SETTINGS['apple_developer_user'],
-		'-p', SETTINGS['apple_developer_app_pw']
-	] + args
-	process = run(all_args, stdout=PIPE, stderr=PIPE, check=True)
-	return plistlib.loads(process.stdout)
+		'xcrun', 'notarytool'
+	] + args + [
+		'--apple-id', SETTINGS['apple_developer_user'],
+		'--password', SETTINGS['apple_developer_app_pw'],
+		'--team-id', SETTINGS['apple_developer_team_id'],
+		'--output-format', 'json'
+	]
+	process = run(all_args, stdout=PIPE)
+	return json.loads(process.stdout)
 
 @command
 def sign_installer():
