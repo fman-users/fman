@@ -15,6 +15,9 @@ import os
 import re
 import sys
 
+if PLATFORM == 'Mac':
+	from fman.impl.mac import get_core_services
+
 __all__ = ['GoTo', 'GoToListener']
 
 class GoTo(DirectoryPaneCommand):
@@ -225,20 +228,9 @@ class SuggestLocations:
 			return str(Path(path).resolve())
 		def samefile(self, f1, f2):
 			return os.path.samefile(f1, f2)
-		_core_services_ns = None
-		def _get_core_services_ns(self):
-			if self.__class__._core_services_ns is None:
-				from objc import loadBundle
-				ns = {}
-				loadBundle(
-					'CoreServices.framework', ns,
-					bundle_identifier='com.apple.CoreServices'
-				)
-				self.__class__._core_services_ns = ns
-			return self.__class__._core_services_ns
 		def find_folders_starting_with(self, pattern, timeout_secs=0.02):
 			if PLATFORM == 'Mac':
-				ns = self._get_core_services_ns()
+				ns = get_core_services()
 				pred = ns['NSPredicate'].predicateWithFormat_argumentArray_(
 					"kMDItemContentType == 'public.folder' && "
 					"kMDItemFSName BEGINSWITH[c] %@", [pattern]

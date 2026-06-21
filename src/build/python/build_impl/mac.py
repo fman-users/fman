@@ -7,7 +7,7 @@ from glob import glob
 from os import remove
 from os.path import basename, join
 from shutil import rmtree, move
-from subprocess import run, PIPE, CalledProcessError, SubprocessError
+from subprocess import run, PIPE, CalledProcessError
 from time import sleep
 
 import json
@@ -53,15 +53,6 @@ def freeze():
 
 def _strip_unused_from_bundle():
 	frameworks = path('${freeze_dir}/Contents/Frameworks')
-	resources = path('${freeze_dir}/Contents/Resources')
-	# boto3/botocore are build-system-only deps, not used at runtime (~40MB):
-	for dir_name in ('boto3', 'botocore', 's3transfer'):
-		for base in (frameworks, resources):
-			dir_path = join(base, dir_name)
-			if os.path.islink(dir_path):
-				os.unlink(dir_path)
-			elif os.path.isdir(dir_path):
-				rmtree(dir_path)
 	# Remove unused Qt frameworks (fman only uses Core, Gui, Widgets,
 	# MacExtras, PrintSupport, Svg):
 	qt_lib = join(frameworks, 'PyQt5', 'Qt5', 'lib')
