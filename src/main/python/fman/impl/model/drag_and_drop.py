@@ -42,7 +42,7 @@ class DragAndDrop(QAbstractTableModel):
 	def mimeData(self, indexes):
 		result = QMimeData()
 		result.setUrls([as_qurl(self.url(index)) for index in indexes])
-		# The Qt documentation (http://doc.qt.io/qt-5/dnd.html) states that the
+		# The Qt documentation (https://doc.qt.io/archives/qt-5.15/dnd.html) states that the
 		# QMimeData should not be deleted, because the target of the drag and
 		# drop operation takes ownership of it. We must therefore tell SIP not
 		# to garbage-collect `result` once this method returns. Without this
@@ -55,7 +55,14 @@ class DragAndDrop(QAbstractTableModel):
 			return True
 		if not data.hasUrls():
 			return False
-		urls = [from_qurl(qurl) for qurl in data.urls()]
+		urls = []
+		for qurl in data.urls():
+			try:
+				urls.append(from_qurl(qurl))
+			except ValueError:
+				continue
+		if not urls:
+			return False
 		dest = self._get_drop_dest(parent)
 		if action in (MoveAction, CopyAction):
 			self.files_dropped.emit(urls, dest, action == CopyAction)

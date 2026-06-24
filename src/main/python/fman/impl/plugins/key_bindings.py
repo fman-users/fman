@@ -62,7 +62,7 @@ def sanitize_key_bindings(bindings, available_commands):
 					'Error: A key binding\'s "keys" must be a list ["..."], '
 					'not %s.' % describe_type(keys)
 				)
-			if not keys:
+			elif not keys:
 				this_binding_errors.append(
 					'Error: A key binding\'s "keys" must be a non-empty list '
 					'["..."], not [].'

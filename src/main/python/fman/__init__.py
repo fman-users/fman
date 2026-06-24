@@ -41,6 +41,8 @@ elif PLATFORM == 'Mac':
 	DATA_DIRECTORY = expanduser('~/Library/Application Support/fman')
 elif PLATFORM == 'Linux':
 	DATA_DIRECTORY = expanduser('~/.config/fman')
+else:
+	raise NotImplementedError('Unsupported platform: %s' % PLATFORM)
 
 class ApplicationCommand:
 	def __init__(self, window):

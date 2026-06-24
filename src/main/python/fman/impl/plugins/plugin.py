@@ -1,13 +1,13 @@
+from concurrent.futures import ThreadPoolExecutor
 from fman import DirectoryPaneCommand, DirectoryPaneListener, ApplicationCommand
 from fman.fs import FileSystem, Column
 from fman.impl.font_database import FontError
 from fman.impl.util import listdir_absolute
 from glob import glob
-from importlib.machinery import SourceFileLoader
+import importlib.util
 from inspect import getmro
 from json import JSONDecodeError
 from os.path import join, isdir, basename, isfile
-from threading import Thread
 
 import inspect
 import json
@@ -102,7 +102,8 @@ def _get_command_name(command_class):
 	try:
 		command_class = command_class.__name__
 	except AttributeError:
-		assert isinstance(command_class, str)
+		if not isinstance(command_class, str):
+			raise TypeError('Expected class or str, got %r' % type(command_class))
 	return re.sub(r'([a-z])([A-Z])', r'\1_\2', command_class).lower()
 
 class ExternalPlugin(Plugin):
@@ -213,20 +214,37 @@ class ExternalPlugin(Plugin):
 				self._add_unload_action(component.unload, config, *args)
 				for error in errors:
 					self._error_handler.report(error)
-					break
 	def _add_unload_action(self, f, *args, **kwargs):
 		self._unload_actions.append((f, args, kwargs))
 	def unload(self):
+		errors = []
 		for f, args, kwargs in reversed(self._unload_actions):
-			f(*args, **kwargs)
+			try:
+				f(*args, **kwargs)
+			except Exception as e:
+				errors.append(e)
 		self._unload_actions = []
+		for e in errors:
+			self._error_handler.report(str(e))
 	def _load_packages(self):
 		for dir_ in [d for d in listdir_absolute(self._path) if isdir(d)]:
 			init = join(dir_, '__init__.py')
 			if isfile(init):
 				package_name = basename(dir_)
-				loader = SourceFileLoader(package_name, init)
-				yield loader.load_module()
+				spec = importlib.util.spec_from_file_location(
+					package_name, init,
+					submodule_search_locations=[dir_]
+				)
+				if spec is None:
+					continue
+				module = importlib.util.module_from_spec(spec)
+				sys.modules[package_name] = module
+				try:
+					spec.loader.exec_module(module)
+				except BaseException:
+					del sys.modules[package_name]
+					raise
+				yield module
 	def _unregister_package(self, package):
 		del sys.modules[package.__name__]
 	def _iterate_classes(self, module):
@@ -283,6 +301,10 @@ class ReportExceptions:
 			return True
 
 class ListenerWrapper(Wrapper):
+	_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix='listener')
+	@classmethod
+	def shutdown_pool(cls, wait=False):
+		cls._POOL.shutdown(wait=wait)
 	def __init__(self, listener, error_handler):
 		super().__init__(listener, 'DirectoryPaneListener', error_handler)
 	def on_doubleclicked(self, *args):
@@ -302,9 +324,7 @@ class ListenerWrapper(Wrapper):
 	def on_location_bar_clicked(self, *args):
 		self._notify_listener('on_location_bar_clicked', *args)
 	def _notify_listener(self, *args):
-		Thread(
-			target=self._notify_listener_in_thread, args=args, daemon=True
-		).start()
+		self._POOL.submit(self._notify_listener_in_thread, *args)
 	def _notify_listener_in_thread(self, event, *args):
 		listener_method = getattr(self._wrapped, event)
 		with self._report_exceptions():

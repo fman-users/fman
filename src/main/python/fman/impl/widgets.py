@@ -16,6 +16,9 @@ from PyQt5.QtWidgets import QWidget, QMainWindow, QSplitter, QStatusBar, \
 	QFrame, QAction, QSizePolicy, QProgressDialog, QProgressBar
 from random import randint, randrange
 
+import struct
+from threading import Lock
+from urllib.parse import quote
 import re
 
 class Application(QApplication):
@@ -37,7 +40,7 @@ class Application(QApplication):
 	def set_style_sheet(self, stylesheet):
 		self.setStyleSheet(stylesheet)
 	def _on_state_changed(self, new_state):
-		if new_state == Qt.ApplicationActive:
+		if new_state == Qt.ApplicationActive and self._main_window is not None:
 			for pane in self._main_window.get_panes():
 				pane.reload()
 
@@ -155,7 +158,7 @@ class DirectoryPaneWidget(QWidget):
 		return column, ascending
 	@run_in_main_thread
 	def get_column_widths(self):
-		return [self._file_view.columnWidth(i) for i in (0, 1)]
+		return [self._file_view.columnWidth(i) for i in range(self._model.columnCount())]
 	@run_in_main_thread
 	def set_column_widths(self, column_widths):
 		num_columns = self._model.columnCount()
@@ -259,7 +262,9 @@ class FilterBar(QFrame):
 	def _on_text_changed(self, text):
 		text_re = '.*'.join(map(re.escape, text.split('*')))
 		self._filter_re = re.compile(text_re, re.I)
-		self._model.sourceModel().update()
+		source = self._model.sourceModel()
+		if source:
+			source.update()
 	def _accepts(self, url):
 		return bool(self._filter_re.search(basename(url)))
 
@@ -301,9 +306,9 @@ class MainWindow(QMainWindow):
 			return
 		help_menu_text = 'Help'
 		if is_mac():
-				# On OS X, any menu named "Help" has the "Spotlight search for
+				# On macOS, any menu named "Help" has the "Spotlight search for
 				# Help" bar displayed in it. We don't need or want this. Add an
-				# invisible character to fool OS X into not treating it as
+				# invisible character to fool macOS into not treating it as
 				# "Help" (' ' doesn't work):
 				help_menu_text += '\u2063'
 		help_menu = self.menuBar().addMenu(help_menu_text)
@@ -421,26 +426,29 @@ class MainWindow(QMainWindow):
 		overlay.show()
 	def _position_overlay(self, overlay):
 		if self._dialog is None:
-			pos_x = (self.width() - overlay.width()) / 2
-			pos_y = (self.height() - overlay.height()) / 2
+			pos_x = (self.width() - overlay.width()) // 2
+			pos_y = (self.height() - overlay.height()) // 2
 		else:
 			dialog_pos = self._dialog.pos()
 			pos_x = dialog_pos.x() - self.pos().x() + self._dialog.width() + 30
 			pos_y = dialog_pos.y() - self.pos().y() + self._dialog.height() + 30
 			right_margin = self.width() - pos_x - overlay.width()
 			if right_margin / self.width() < 0.1:
-				pos_x = 0.9 * self.width() - overlay.width()
-		overlay.move(pos_x, pos_y)
+				pos_x = int(0.9 * self.width() - overlay.width())
+		overlay.move(int(pos_x), int(pos_y))
 	def saveState(self, version=0):
 		self_state = super().saveState(version)
 		splitter_state = self._splitter.saveState()
-		return self_state + splitter_state + bytes([len(self_state)])
+		return self_state + splitter_state + struct.pack('<I', len(self_state))
 	def restoreState(self, state, version=0):
-		self_state_len = state[-1]
-		if not super().restoreState(state[0:self_state_len], version):
+		try:
+			self_state_len = struct.unpack('<I', state[-4:])[0]
+			if not super().restoreState(state[0:self_state_len], version):
+				return False
+			self._splitter.restoreState(state[self_state_len:-4])
+			return True
+		except (struct.error, Exception):
 			return False
-		self._splitter.restoreState(state[self_state_len:-1])
-		return True
 	def focusNextPrevChild(self, next):
 		# Returning False here lets us receive Tab in keyPressEvent(...).
 		# This in turn lets us define our own key binding for the Tab key.
@@ -618,7 +626,8 @@ class SplashScreen(QDialog):
 				'</span>'
 				'<br/>'
 				'For more information, please '
-				'<a href="https://fman.io/account/login?email=' + email + '">'
+				'<a href="https://fman.io/account/login?email='
+					+ quote(email, safe='') + '">'
 					'log in to fman.io'
 				'</a>.',
 				"To continue without a license, press button %s."
@@ -718,6 +727,7 @@ class ProgressDialog(QProgressDialog):
 		self._text = ''
 		self._progress = 0
 		self._was_canceled = False
+		self._state_lock = Lock()
 		self.findChild(QProgressBar).setPalette(progress_bar_palette)
 		self.setMinimumDuration(self._MINIMUM_DURATION_MS)
 		self.setAutoReset(False)
@@ -730,15 +740,19 @@ class ProgressDialog(QProgressDialog):
 		# Ensure the progress dialog appears in 1 sec starting *now*:
 		self.setValue(0)
 	def set_text(self, text):
-		self._text = text
+		with self._state_lock:
+			self._text = text
 	@run_in_main_thread
 	def set_task_size(self, size):
-		self._size = size
+		with self._state_lock:
+			self._size = size
 		self.setMaximum(min(size, self._MAX_C_INT))
 	def set_progress(self, progress):
-		self._progress = progress
+		with self._state_lock:
+			self._progress = progress
 	def get_progress(self):
-		return self._progress
+		with self._state_lock:
+			return self._progress
 	def reject(self):
 		# Called when the user presses the "Close window" button.
 		self.request_cancel()
@@ -749,7 +763,8 @@ class ProgressDialog(QProgressDialog):
 	def request_cancel(self):
 		self.set_text('Canceling...')
 		cancel_button = self.findChild(QPushButton)
-		cancel_button.setEnabled(False)
+		if cancel_button is not None:
+			cancel_button.setEnabled(False)
 		self._was_canceled = True
 	@run_in_main_thread
 	def show_alert(self, *args, **kwargs):
@@ -776,8 +791,10 @@ class ProgressDialog(QProgressDialog):
 	def _update(self):
 		if self.wasCanceled():
 			return
-		self.setLabelText(self._text)
-		self._set_value(self._progress)
+		with self._state_lock:
+			text, progress = self._text, self._progress
+		self.setLabelText(text)
+		self._set_value(progress)
 	def _set_value(self, progress):
 		if self._size > self._MAX_C_INT:
 			# QProgressDialog#setValue(...) can only handle ints. If `progress`

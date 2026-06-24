@@ -96,7 +96,7 @@ def release():
 					settings_path, next_version + snapshot_suffix,
 					'Bump version for next development iteration'
 				)
-				git('push', '-u', 'origin', 'master')
+				git('push', '-u', 'origin', 'main')
 				try:
 					git('push', 'origin', release_tag)
 					try:
@@ -106,7 +106,7 @@ def release():
 							'    git pull\n'
 							'    git checkout %s\n'
 							'    python build.py release\n'
-							'    git checkout master\n\n'
+							'    git checkout main\n\n'
 							'on the other OSs now, then come back here and do:'
 							'\n\n'
 							'    python build.py post_release\n'
@@ -117,7 +117,7 @@ def release():
 						raise
 				except:
 					git('revert', '--no-edit', revision_before + '..HEAD' )
-					git('push', '-u', 'origin', 'master')
+					git('push', '-u', 'origin', 'main')
 					revision_before = git('rev-parse', 'HEAD').rstrip()
 					raise
 			except:
@@ -149,7 +149,7 @@ def post_release():
 	create_cloudfront_invalidation(cloudfront_items_to_invalidate)
 	record_release_on_server()
 	upload_core_to_github()
-	git('checkout', 'master')
+	git('checkout', 'main')
 
 def _prompt_for_next_version(release_version):
 	next_version = _get_suggested_next_version(release_version)

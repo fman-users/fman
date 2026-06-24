@@ -159,4 +159,6 @@ class TourStep:
 			line = re.subn(r'\*([^*]+)\*', highlight(r'\1'), line)[0]
 			line = re.subn(r'_([^_]+)_', underline(r'\1'), line)[0]
 			result += line
+		if is_list:
+			result += '</ul>'
 		return result
