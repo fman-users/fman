@@ -37,7 +37,7 @@ class Application(QApplication):
 	def set_style_sheet(self, stylesheet):
 		self.setStyleSheet(stylesheet)
 	def _on_state_changed(self, new_state):
-		if new_state == Qt.ApplicationActive:
+		if new_state == Qt.ApplicationActive and self._main_window is not None:
 			for pane in self._main_window.get_panes():
 				pane.reload()
 
@@ -155,7 +155,7 @@ class DirectoryPaneWidget(QWidget):
 		return column, ascending
 	@run_in_main_thread
 	def get_column_widths(self):
-		return [self._file_view.columnWidth(i) for i in (0, 1)]
+		return [self._file_view.columnWidth(i) for i in range(self._model.columnCount())]
 	@run_in_main_thread
 	def set_column_widths(self, column_widths):
 		num_columns = self._model.columnCount()

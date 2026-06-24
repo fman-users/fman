@@ -351,7 +351,7 @@ class ZipFileSystemTest(TestCase):
 				child_contents = self._read_directory(child)
 			else:
 				child_contents = child.read_text()
-			result[child.name] = child_contents
+			result[normalize('NFC', child.name)] = child_contents
 		return result
 	def _expect_zip_contents(self, contents, zip_file_path):
 		with TemporaryDirectory() as tmp_dir:

@@ -1,6 +1,6 @@
 from fman.fs import FileSystem
 from fman.impl.plugins.plugin import _get_command_name, \
-	get_command_class_name, FileSystemWrapper
+	get_command_class_name, FileSystemWrapper, ReportExceptions
 from fman_unittest.impl.plugins import StubErrorHandler
 from unittest import TestCase
 
@@ -93,6 +93,35 @@ class FileSystemWrapperTest(TestCase):
 	def setUp(self):
 		super().setUp()
 		self._error_handler = StubErrorHandler()
+
+class ReportExceptionsTest(TestCase):
+	def test_no_exception(self):
+		handler = StubErrorHandler()
+		with ReportExceptions(handler, 'msg') as cm:
+			pass
+		self.assertIsNone(cm.exception)
+		self.assertEqual([], handler.error_messages)
+	def test_reports_exception(self):
+		handler = StubErrorHandler()
+		with ReportExceptions(handler, 'something broke'):
+			raise ValueError('bad')
+		self.assertEqual(['something broke'], handler.error_messages)
+	def test_excludes_exception_class(self):
+		handler = StubErrorHandler()
+		with self.assertRaises(StopIteration):
+			with ReportExceptions(handler, 'msg', exclude={StopIteration}):
+				raise StopIteration()
+		self.assertEqual([], handler.error_messages)
+	def test_exclude_must_be_set(self):
+		handler = StubErrorHandler()
+		with self.assertRaises(ValueError):
+			ReportExceptions(handler, 'msg', exclude=StopIteration)
+	def test_exception_stored(self):
+		handler = StubErrorHandler()
+		with ReportExceptions(handler, 'msg') as cm:
+			raise RuntimeError('stored')
+		self.assertIsInstance(cm.exception, RuntimeError)
+
 
 class StubMotherFileSystem:
 	def __init__(self, columns):

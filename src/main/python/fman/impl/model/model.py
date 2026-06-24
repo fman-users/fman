@@ -10,17 +10,18 @@ from fman.url import join, dirname
 from functools import wraps, lru_cache
 from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtGui import QIcon, QPixmap
-from threading import Event
+from threading import Event, Lock
 from time import time
 
 def transaction(priority, synchronous=False):
 	def decorator(f):
 		@wraps(f)
 		def result(self, *args, **kwargs):
-			if self._shutdown:
+			if self._shutdown.is_set():
 				return
 			if synchronous:
-				assert not is_in_main_thread()
+				if is_in_main_thread():
+					raise RuntimeError('Synchronous transaction must not run in main thread')
 				has_run = Event()
 				def task():
 					f(self, *args, **kwargs)
@@ -66,7 +67,8 @@ class Model(SortFilterTableModel, DragAndDrop):
 		self._files = {}
 		self._file_watcher = FileWatcher(fs, self)
 		self._worker = Worker()
-		self._shutdown = False
+		self._shutdown = Event()
+		self._files_lock = Lock()
 	def start(self, callback):
 		self._worker.start()
 		self._init(callback)
@@ -78,7 +80,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 		except FileNotFoundError:
 			self.location_disappeared.emit(self._location)
 			return
-		while not self._shutdown:
+		while not self._shutdown.is_set():
 			try:
 				file_name = next(file_names)
 			except FileNotFoundError:
@@ -94,11 +96,10 @@ class Model(SortFilterTableModel, DragAndDrop):
 					continue
 				files.append(file_)
 		else:
-			assert self._shutdown
 			return
 		preloaded_files = self._sorted(self._filter(files))
 		for i in range(min(self._num_rows_to_preload, len(preloaded_files))):
-			if self._shutdown:
+			if self._shutdown.is_set():
 				return
 			try:
 				preloaded_files[i] = self._load_file(preloaded_files[i].url)
@@ -151,14 +152,18 @@ class Model(SortFilterTableModel, DragAndDrop):
 			# comment in #_on_rows_inited_main(...).
 			self._on_rows_inited_main(rows, preloaded_rows, callback)
 		else:
-			callback()
+			self._on_empty_rows_inited(callback)
+	@run_in_main_thread
+	def _on_empty_rows_inited(self, callback):
+		callback()
 	@run_in_main_thread
 	def _on_rows_inited_main(self, rows, preloaded_rows, callback):
-		self._files = {
-			row.url: row for row in rows
-		}
-		for preloaded_row in preloaded_rows:
-			self._files[preloaded_row.url] = preloaded_row
+		with self._files_lock:
+			self._files = {
+				row.url: row for row in rows
+			}
+			for preloaded_row in preloaded_rows:
+				self._files[preloaded_row.url] = preloaded_row
 		# We have a transaction_ended listener that ensures we have a cursor.
 		# It is used for example when a filter's conditions were relaxed, so
 		# there are now visible files when previously there were none. However,
@@ -176,7 +181,8 @@ class Model(SortFilterTableModel, DragAndDrop):
 	def row_is_loaded(self, rownum):
 		return self._rows[rownum].is_loaded
 	def load_rows(self, rownums, callback=None):
-		assert is_in_main_thread()
+		if not is_in_main_thread():
+			raise RuntimeError('load_rows must be called from main thread')
 		urls = [self._rows[i].url for i in rownums]
 		self._load_files_async(urls, callback)
 	@transaction(priority=2)
@@ -186,7 +192,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 		files = []
 		disappeared = []
 		for url in urls:
-			if self._shutdown:
+			if self._shutdown.is_set():
 				return
 			try:
 				files.append(self._load_file(url))
@@ -217,6 +223,8 @@ class Model(SortFilterTableModel, DragAndDrop):
 		"""
 		if disappeared is None:
 			disappeared = []
+		if self._shutdown.is_set():
+			return
 		self._begin_transaction()
 		RecordFiles(
 			files, disappeared, self._files,
@@ -226,15 +234,20 @@ class Model(SortFilterTableModel, DragAndDrop):
 	@transaction(priority=3)
 	def sort(self, column, order=Qt.AscendingOrder):
 		ascending = order == Qt.AscendingOrder
-		for i, row in enumerate(self._rows):
+		updated = {}
+		for row in list(self._rows):
 			if not self._sort_value_is_loaded(row, column, ascending):
 				new_row = self._load_sort_value(row, column, ascending)
-				# Here, we violate the constraint that data only be changed in
-				# the main thread. But! The data we are changing here is not
-				# "visible" outside this class. So it's OK.
+				updated[row.url] = new_row
+		self._commit_sort_updates_and_sort(updated, column, order)
+	@run_in_main_thread
+	def _commit_sort_updates_and_sort(self, updated, column, order):
+		for i, row in enumerate(self._rows):
+			if row.url in updated:
+				new_row = updated[row.url]
 				self._rows[i] = new_row
-				self._files[row.url] = new_row
-		run_in_main_thread(super().sort)(column, order)
+				self._files[new_row.url] = new_row
+		super().sort(column, order)
 	def _sort_value_is_loaded(self, row, column, ascending):
 		try:
 			self.get_sort_value(row, column, ascending)
@@ -271,13 +284,14 @@ class Model(SortFilterTableModel, DragAndDrop):
 	@transaction(priority=5)
 	def reload(self):
 		self._fs.clear_cache(self._location)
+		files_snapshot = self._snapshot_files()
 		files = []
 		try:
 			file_names = iter(self._fs.iterdir(self._location))
 		except FileNotFoundError:
 			self.location_disappeared.emit(self._location)
 			return
-		while not self._shutdown:
+		while not self._shutdown.is_set():
 			try:
 				file_name = next(file_names)
 			except FileNotFoundError:
@@ -287,9 +301,10 @@ class Model(SortFilterTableModel, DragAndDrop):
 				break
 			else:
 				url = join(self._location, file_name)
+				self._fs.clear_cache(url)
 				try:
 					try:
-						file_before = self._files[url]
+						file_before = files_snapshot[url]
 					except KeyError:
 						file_ = self._init_file(url)
 					else:
@@ -301,16 +316,18 @@ class Model(SortFilterTableModel, DragAndDrop):
 					continue
 				files.append(file_)
 		else:
-			assert self._shutdown
 			return
 		self._on_files_reloaded(files)
 		# We may have found new files that now still need to be loaded:
 		self._load_remaining_files()
 	@run_in_main_thread
 	def _on_files_reloaded(self, rows):
-		self._files = {
-			row.url: row for row in rows
-		}
+		if self._shutdown.is_set():
+			return
+		with self._files_lock:
+			self._files = {
+				row.url: row for row in rows
+			}
 		self.update()
 	def get_columns(self):
 		return self._columns
@@ -326,6 +343,10 @@ class Model(SortFilterTableModel, DragAndDrop):
 		except KeyError:
 			raise ValueError('%r is not in list' % url) from None
 		return self.index(rownum, 0)
+	@run_in_main_thread
+	def _snapshot_files(self):
+		with self._files_lock:
+			return dict(self._files)
 	def get_rows(self):
 		return self._files.values()
 	def get_sort_value(self, row, column, ascending):
@@ -341,16 +362,19 @@ class Model(SortFilterTableModel, DragAndDrop):
 		return super().setData(index, value, role)
 	@transaction(priority=6, synchronous=True)
 	def notify_file_added(self, url):
-		assert dirname(url) == self._location
+		if dirname(url) != self._location:
+			raise ValueError('url %r not in %r' % (url, self._location))
 		self._load_files([url])
 	@transaction(priority=6, synchronous=True)
 	def notify_file_changed(self, url):
-		assert dirname(url) == self._location
+		if dirname(url) != self._location:
+			raise ValueError('url %r not in %r' % (url, self._location))
 		self._fs.clear_cache(url)
 		self._load_files([url])
 	@transaction(priority=6, synchronous=True)
 	def notify_file_renamed(self, old_url, new_url):
-		assert dirname(old_url) == dirname(new_url) == self._location
+		if not (dirname(old_url) == dirname(new_url) == self._location):
+			raise ValueError('urls not in %r' % self._location)
 		self._fs.clear_cache(old_url)
 		try:
 			new_file = self._load_file(new_url)
@@ -369,7 +393,8 @@ class Model(SortFilterTableModel, DragAndDrop):
 		self._record_files([new_file], [old_url])
 	@transaction(priority=6, synchronous=True)
 	def notify_file_removed(self, url):
-		assert dirname(url) == self._location
+		if dirname(url) != self._location:
+			raise ValueError('url %r not in %r' % (url, self._location))
 		self._fs.clear_cache(url)
 		self._record_files([], [url])
 	@transaction(priority=7)
@@ -378,8 +403,8 @@ class Model(SortFilterTableModel, DragAndDrop):
 		files = []
 		disappeared = []
 		all_loaded = False
-		for row in self._rows:
-			if self._shutdown:
+		for row in list(self._rows):
+			if self._shutdown.is_set():
 				return
 			if time() > end_time:
 				break
@@ -395,7 +420,7 @@ class Model(SortFilterTableModel, DragAndDrop):
 		if not all_loaded:
 			self._load_remaining_files()
 	def shutdown(self):
-		self._shutdown = True
+		self._shutdown.set()
 		# Similarly to why we don't want to call FileWatcher#start() from the
 		# main thread, we also don't want to call #shutdown() from it to avoid
 		# potential deadlocks. So do it asynchronously:

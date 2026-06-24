@@ -367,7 +367,8 @@ class Tutorial(Tour):
 				(now, path, 'Cmd' if is_mac() else 'Ctrl')
 			)
 		else:
-			assert instruction == 'go to'
+			if instruction != 'go to':
+				raise ValueError('Unexpected instruction: %r' % instruction)
 			text = "We need to go to *%s*. Please press *%s* to open " \
 				   "fman's GoTo dialog. There, type *%s* followed by *Enter*."\
 				   % (path, self._cmd_p, path)
@@ -506,7 +507,8 @@ def _get_navigation_steps(
 		if dst_is_unc:
 			unc_parts = dst_drive[2:].split('\\')
 			server = unc_parts[0]
-			assert server == server.upper(), server
+			if server != server.upper():
+				raise ValueError('Server name not uppercase: %r' % server)
 			src_path = splitscheme(src_url)[1]
 			if not src_path:
 				return [('open', server)] + continue_from('network://' + server)
@@ -540,7 +542,8 @@ def _upper_server(unc_path):
 	r"""
 	\\server\Folder -> \\SERVER\Folder
 	"""
-	assert unc_path.startswith(r'\\'), unc_path
+	if not unc_path.startswith(r'\\'):
+		raise ValueError('Not a UNC path: %r' % unc_path)
 	try:
 		i = unc_path.index('\\', 2)
 	except ValueError:
