@@ -20,6 +20,8 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 	sort_order_changed = pyqtSignal(int, int)
 	transaction_ended = pyqtSignal()
 
+	_MAX_VISITED = 512
+
 	def __init__(self, parent, fs, null_location):
 		super().__init__(parent)
 		self._fs = fs
@@ -105,6 +107,9 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 		)
 		self.setSourceModel(new_model)
 		self._connect_signals(new_model)
+		if len(self._already_visited) > self._MAX_VISITED:
+			self._already_visited.clear()
+			self._already_visited.add(url)
 		self._already_visited.add(url)
 		self.location_changed.emit(url)
 		order = Qt.AscendingOrder if ascending else Qt.DescendingOrder
@@ -146,21 +151,19 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 	def find(self, url):
 		return self.mapFromSource(self.sourceModel().find(url))
 	def _on_file_removed(self, url):
+		if not self.sourceModel():
+			return
 		if is_pardir(url, self.get_location()):
-			dir_ = dirname(url)
-			if dir_ == url:
-				self.set_location(self._null_location)
-			else:
+			while True:
+				dir_ = dirname(url)
+				if dir_ == url:
+					self.set_location(self._null_location)
+					return
 				try:
 					self.set_location(dir_)
+					return
 				except OSError:
-					# In a perfect world, would like to only handle
-					# FileNotFoundError here. But there can of course also be
-					# other reasons. For example, when on a network share on
-					# Windows, we may get a PermissionError trying to list a
-					# parent directory we don't have access to. So catch all
-					# OSErrors and in the worst case go to null://.
-					self._on_file_removed(dir_)
+					url = dir_
 	def _connect_signals(self, model):
 		# Would prefer signal.connect(self.signal.emit) here. But PyQt doesn't
 		# support it. So we need Python wrappers "_emit_...":
@@ -189,5 +192,11 @@ class SortedFileSystemModel(QSortFilterProxyModel):
 		self.sort_order_changed.emit(column, order)
 	def _emit_transaction_ended(self):
 		self.transaction_ended.emit()
+	def shutdown(self):
+		self._fs.file_removed.remove_callback(self._on_file_removed)
+		model = self.sourceModel()
+		if model:
+			self._disconnect_signals(model)
+			model.shutdown()
 	def __str__(self):
 		return '<%s: %s>' % (self.__class__.__name__, self.get_location())

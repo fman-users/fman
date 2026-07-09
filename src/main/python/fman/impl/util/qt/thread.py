@@ -54,23 +54,23 @@ class Executor:
 			return cls._INSTANCE
 	def __init__(self, app):
 		self._pending_tasks = []
+		self._tasks_lock = Lock()
 		self._app_is_about_to_quit = False
 		app.aboutToQuit.connect(self._about_to_quit)
 	def _about_to_quit(self):
-		self._app_is_about_to_quit = True
-		for task in self._pending_tasks:
-			task.set_exception(SystemExit())
-			task.has_run.set()
+		with self._tasks_lock:
+			self._app_is_about_to_quit = True
+			for task in self._pending_tasks:
+				task.set_exception(SystemExit())
+				task.has_run.set()
 	def run_in_thread(self, thread, f, args, kwargs):
 		if QThread.currentThread() == thread:
 			return f(*args, **kwargs)
-		elif self._app_is_about_to_quit:
-			# In this case, the target thread's event loop most likely is not
-			# running any more. This would mean that our task (which is
-			# submitted to the event loop via signals/slots) is never run.
-			raise SystemExit()
-		task = Task(f, args, kwargs)
-		self._pending_tasks.append(task)
+		with self._tasks_lock:
+			if self._app_is_about_to_quit:
+				raise SystemExit()
+			task = Task(f, args, kwargs)
+			self._pending_tasks.append(task)
 		try:
 			receiver = Receiver(task)
 			receiver.moveToThread(thread)
@@ -80,7 +80,8 @@ class Executor:
 			task.has_run.wait()
 			return task.result
 		finally:
-			self._pending_tasks.remove(task)
+			with self._tasks_lock:
+				self._pending_tasks.remove(task)
 
 class Task:
 	def __init__(self, fn, args, kwargs):
@@ -92,7 +93,8 @@ class Task:
 	def __call__(self):
 		try:
 			self._result = self._fn(*self._args, **self._kwargs)
-		except Exception as e:
+			self._exception = None
+		except BaseException as e:
 			self._exception = e
 		finally:
 			self.has_run.set()

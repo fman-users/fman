@@ -68,13 +68,6 @@ class SessionManager:
 				'Updated to v%s. <a href="https://fman.io/changelog?s=f">' \
 				'Changelog</a>' % self._fman_version
 		main_window.show_status_message(status_message, timeout_secs=5)
-	def _get_startup_message(self):
-		previous_version = self._settings.get('fman_version', None)
-		if not previous_version or previous_version == self._fman_version:
-			return 'v%s ready.' % self._fman_version
-		return 'Updated to v%s. ' \
-			   '<a href="https://fman.io/changelog?s=f">Changelog</a>' \
-			   % self._fman_version
 	def _init_panes(self, panes, pane_infos, paths_on_cmdline):
 		with ThreadPoolExecutor(max_workers=len(panes)) as executor:
 			futures = [

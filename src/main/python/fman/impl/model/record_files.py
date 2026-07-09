@@ -92,6 +92,7 @@ class RecordFiles:
 				else:
 					if not self._m_accepts(file_):
 						to_remove.append(rownum)
+						self._m_files[file_.url] = file_
 						continue
 					if file_ != old_file:
 						to_update.append((rownum, file_))
