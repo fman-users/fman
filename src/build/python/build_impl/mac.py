@@ -1,17 +1,13 @@
-from build_impl import copy_framework, SETTINGS, copy_python_library, \
-	upload_file, upload_installer_to_aws
+from build_impl import SETTINGS, copy_python_library, upload_installer_to_aws
 from fbs import path
 from fbs.cmdline import command
 from fbs.freeze.mac import freeze_mac
-from glob import glob
 from os import remove
 from os.path import basename, isdir, isfile, islink, join
 from shutil import rmtree, move
 from subprocess import run, PIPE
 
 import json
-
-_UPDATES_DIR = 'updates/mac'
 
 @command
 def freeze():
@@ -29,10 +25,6 @@ def freeze():
 	# Similarly for Roboto Bold.ttf. It is only used on Windows:
 	remove(path('${core_plugin_in_freeze_dir}/Roboto Bold.ttf'))
 	_strip_unused_from_bundle()
-	copy_framework(
-		path('lib/mac/Sparkle-1.22.0/Sparkle.framework'),
-		path('${freeze_dir}/Contents/Frameworks/Sparkle.framework')
-	)
 	copy_python_library('osxtrash', path('${core_plugin_in_freeze_dir}'))
 	import osxtrash
 	so_name = basename(osxtrash.__file__)
@@ -82,19 +74,11 @@ def _strip_unused_from_bundle():
 @command
 def sign():
 	app_dir = path('${freeze_dir}')
-	sparkle_dir = join(app_dir, 'Contents/Frameworks/Sparkle.framework')
-	# Avoid some Notarization warnings by signing not just the app_dir, but some
-	# sub-directories as well:
-	for binary_path in (
-		join(sparkle_dir, 'Versions/A/Resources/Autoupdate.app'),
-		sparkle_dir,
+	_run_codesign(
+		'--deep', '--force', '--options', 'runtime',
+		'--entitlements', path('src/sign/mac/entitlements.plist'),
 		app_dir
-	):
-		_run_codesign(
-			'--deep', '--force', '--options', 'runtime',
-			'--entitlements', path('src/sign/mac/entitlements.plist'),
-			binary_path
-		)
+	)
 	zip_path = path('${freeze_dir}') + '.zip'
 	_zip_mac(app_dir, zip_path)
 	_notarize(zip_path)
@@ -147,15 +131,6 @@ def sign_installer():
 
 @command
 def upload():
-	_zip_mac(
-		path('${freeze_dir}'),
-		path('target/autoupdate/%s.zip' % SETTINGS['version'])
-	)
-	upload_file(
-		path('target/autoupdate/%s.zip' % SETTINGS['version']), _UPDATES_DIR
-	)
-	for patch_file in glob(path('target/autoupdate/*.delta')):
-		upload_file(patch_file, _UPDATES_DIR)
 	if SETTINGS['release']:
 		upload_installer_to_aws('fman.dmg')
 

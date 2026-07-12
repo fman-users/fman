@@ -26,8 +26,6 @@ class User:
 	def license_is_valid_for_curr_version(self, fman_version):
 		max_version = self._key_data.get('max_version', fman_version)
 		return parse_version(fman_version) <= parse_version(max_version)
-	def is_entitled_to_updates(self):
-		return 'max_version' not in self._key_data
 	@property
 	def _key_data(self):
 		try:

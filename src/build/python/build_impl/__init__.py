@@ -12,11 +12,6 @@ import re
 import os
 import sys
 
-def copy_framework(src_dir, dest_dir):
-	assert is_mac()
-	assert basename(src_dir).endswith('.framework')
-	run(['cp', '-a', '-p', src_dir, dest_dir], check=True)
-
 def remove_if_exists(file_path):
 	try:
 		remove(file_path)

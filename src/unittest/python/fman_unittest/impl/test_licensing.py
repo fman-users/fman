@@ -10,21 +10,16 @@ class UserTest(TestCase):
 	def test_no_email(self):
 		user = User()
 		self.assertFalse(user.is_licensed('0.2.9'))
-		self.assertTrue(user.is_entitled_to_updates())
 	def test_no_key(self):
 		user = User('michael@herrmann.io')
 		self.assertFalse(user.is_licensed('0.2.9'))
-		self.assertTrue(user.is_entitled_to_updates())
 	def test_licensed(self):
 		user = self._create_licensed_user('michael@herrmann.io')
 		self.assertTrue(user.is_licensed('0.2.9'))
-		self.assertTrue(user.is_entitled_to_updates())
-		self.assertTrue(user.is_entitled_to_updates())
 	def test_licensed_max_version(self):
 		user = self._create_licensed_user('michael@herrmann.io', '0.2.9')
 		self.assertTrue(user.is_licensed('0.2.9'))
 		self.assertFalse(user.is_licensed('0.3.0'))
-		self.assertFalse(user.is_entitled_to_updates())
 	def _create_licensed_user(self, email, max_version=None):
 		key_kwargs = {'email': email}
 		if max_version:

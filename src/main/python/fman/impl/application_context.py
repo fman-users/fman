@@ -28,7 +28,6 @@ from fman.impl.theme import Theme
 from fman.impl.onboarding import TourController
 from fman.impl.onboarding.cleanup_guide import CleanupGuide
 from fman.impl.onboarding.tutorial import Tutorial
-from fman.impl.updater import MacUpdater
 from fman.impl.usage_helper import UsageHelper
 from fman.impl.util import os_
 from fman.impl.util.qt import connect_once
@@ -89,8 +88,6 @@ class DevelopmentApplicationContext(ApplicationContext):
 	def fman_version(self):
 		return self.build_settings['version']
 	def on_main_window_shown(self):
-		if self.updater:
-			self.updater.start()
 		if self.is_licensed:
 			if not self.session_manager.was_licensed_on_last_run:
 				self.metrics.track('InstalledLicenseKey')
@@ -404,9 +401,6 @@ class DevelopmentApplicationContext(ApplicationContext):
 			base_style = QStyleFactory.create('Fusion')
 		return ProxyStyle(base_style)
 	@cached_property
-	def updater(self):
-		return None
-	@cached_property
 	def window(self):
 		return Window(self.main_window, self.pane_command_registry)
 	def _get_local_data_file(self, *rel_path):
@@ -457,10 +451,6 @@ class FrozenApplicationContext(DevelopmentApplicationContext):
 			del os.environ[var]
 		super().on_main_window_shown()
 	@cached_property
-	def updater(self):
-		if self._should_auto_update():
-			return MacUpdater(self.app)
-	@cached_property
 	def exception_handlers(self):
 		result = super().exception_handlers
 		result.append(self.sentry_exception_handler)
@@ -482,17 +472,3 @@ class FrozenApplicationContext(DevelopmentApplicationContext):
 		self.sentry_exception_handler.scope.user = {
 			'id': self.metrics.get_user()
 		}
-	def _should_auto_update(self):
-		if not is_mac():
-			# On Windows and Linux, auto-updates are handled by external
-			# technologies. No need for fman itself to update:
-			return False
-		if not self.user.is_entitled_to_updates():
-			return False
-		try:
-			with open(join(DATA_DIRECTORY, 'Local', 'Updates.json'), 'r') as f:
-				data = json.load(f)
-		except (FileNotFoundError, ValueError):
-			return True
-		else:
-			return data.get('enabled', True)
