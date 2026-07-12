@@ -1,4 +1,4 @@
-from fbs_runtime import application_context as fbs_appctxt
+from fbs_runtime import application_context as fbs_appctxt, PUBLIC_SETTINGS
 from fbs_runtime.application_context import cached_property
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
 from fbs_runtime.excepthook import StderrExceptionHandler
@@ -86,7 +86,7 @@ class DevelopmentApplicationContext(ApplicationContext):
 		self.theme.enable_updates()
 	@property
 	def fman_version(self):
-		return self.build_settings['version']
+		return PUBLIC_SETTINGS['version']
 	def on_main_window_shown(self):
 		if self.is_licensed:
 			if not self.session_manager.was_licensed_on_last_run:
@@ -308,7 +308,7 @@ class DevelopmentApplicationContext(ApplicationContext):
 				return False
 	@cached_property
 	def metrics_backend(self):
-		metrics_url = self.build_settings['server_url'] + '/metrics'
+		metrics_url = PUBLIC_SETTINGS['server_url'] + '/metrics'
 		backend = ServerBackend(metrics_url + '/users', metrics_url + '/events')
 		if self.metrics_logging_enabled:
 			backend = LoggingBackend(backend)
@@ -458,9 +458,9 @@ class FrozenApplicationContext(DevelopmentApplicationContext):
 	@cached_property
 	def sentry_exception_handler(self):
 		return SentryExceptionHandler(
-			self.build_settings['sentry_dsn'],
+			PUBLIC_SETTINGS['sentry_dsn'],
 			self.fman_version,
-			self.build_settings['environment'],
+			PUBLIC_SETTINGS['environment'],
 			callback=self._on_sentry_init
 		)
 	def _on_sentry_init(self):

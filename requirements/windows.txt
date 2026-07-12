@@ -2,6 +2,6 @@
 PyQt5==5.15.11
 # Note: Send2Trash 1.5.0 has no effect on Windows!
 Send2Trash==1.8.3
-adodbapi==2.6.0.7
-pywinpty==2.0.14
-pywin32==308
+# adodbapi is bundled with pywin32, so we don't depend on it separately.
+pywinpty==3.0.5
+pywin32==312
