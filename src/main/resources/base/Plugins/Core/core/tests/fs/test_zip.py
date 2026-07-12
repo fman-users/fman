@@ -307,16 +307,17 @@ class ZipFileSystemTest(TestCase):
 			self._fs.resolve('non-existent')
 	def _expect_iterdir_result(self, path_in_zip, expected_contents):
 		full_path = self._path(path_in_zip)
+		self.assertEqual(
+			set(self._normalize_unicode(s) for s in expected_contents),
+			set(self._normalize_unicode(s) for s in self._fs.iterdir(full_path))
+		)
+	def _normalize_unicode(self, name):
 		# Consider ç: It can be encoded in Unicode as "latin small letter c
 		# with cedilla" (U+00E7) but also as a c followed by "combining
 		# cedilla" (U+0327). This source file uses the former, but on Mac,
 		# the file system gives us the latter. To accommodate this, we normalize
-		# Unicode strings first:
-		norm_unicode = lambda strs: set(normalize('NFC', s) for s in strs)
-		self.assertEqual(
-			norm_unicode(expected_contents),
-			norm_unicode(self._fs.iterdir(full_path))
-		)
+		# Unicode file names before comparing them:
+		return normalize('NFC', name)
 	def _url(self, path_in_zip):
 		return as_url(self._path(path_in_zip), 'zip://')
 	def _path(self, path_in_zip, zip_path=None):
@@ -351,7 +352,7 @@ class ZipFileSystemTest(TestCase):
 				child_contents = self._read_directory(child)
 			else:
 				child_contents = child.read_text()
-			result[child.name] = child_contents
+			result[self._normalize_unicode(child.name)] = child_contents
 		return result
 	def _expect_zip_contents(self, contents, zip_file_path):
 		with TemporaryDirectory() as tmp_dir:
