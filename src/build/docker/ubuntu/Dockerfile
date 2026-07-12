@@ -1,22 +1,22 @@
 # Build on an old Ubuntu version on purpose, to maximize compatibility:
-FROM fmanbuildsystem/ubuntu:16.04
+FROM ubuntu:22.04
 
 ARG requirements
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
     apt-get upgrade -y
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get install software-properties-common -y && \
-    add-apt-repository ppa:deadsnakes/ppa -y && \
-    apt-get update && \
-    apt-get install python3.9 python3.9-dev python3.9-venv -y
+# uv manages Python (3.14) and the virtual environment below:
+COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /uvx /bin/
 
 # Add missing file libGL.so.1 for PyQt5.QtGui:
 RUN apt-get install libgl1-mesa-glx -y
 
 # fpm:
 RUN apt-get install ruby ruby-dev build-essential -y && \
-    gem install --no-ri --no-rdoc fpm
+    gem install --no-document fpm
 
 WORKDIR /root/${app_name}
 
@@ -25,8 +25,10 @@ RUN apt-get install gobject-introspection libgtk-3-0 -y
 
 # Set up virtual environment:
 ADD *.txt /tmp/requirements/
-RUN python3.9 -m venv venv && \
-    venv/bin/python -m pip install -U pip && \
+# Install with pip rather than `uv pip`: the fbs dependency is a direct URL
+# without an archive extension, which uv rejects but pip resolves via the
+# response's Content-Disposition header.
+RUN uv venv --python 3.14 --seed venv && \
     venv/bin/python -m pip install -r "/tmp/requirements/${requirements}"
 RUN rm -rf /tmp/requirements/
 

@@ -1,2 +1,3 @@
 -r linux.txt
-pgi==0.0.11.1
+# Fork of pgi==0.0.11.1 that works on Python 3.14+ (upstream is unmaintained):
+pgi @ https://github.com/mherrmann/pgi/archive/b29b5a4a8581dd72b05fdff3ebeab6efb4ce5240.tar.gz
