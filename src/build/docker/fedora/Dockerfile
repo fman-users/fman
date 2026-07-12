@@ -3,7 +3,8 @@ FROM fedora:30
 
 ARG requirements
 
-RUN dnf install -y python39
+# uv manages Python (3.14) and the virtual environment below:
+COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /uvx /bin/
 
 # Absolute minimum requirements for building a PyQt5 app with PyInstaller:
 RUN dnf install -y libstdc++ freetype binutils
@@ -20,8 +21,9 @@ RUN dnf install -y gobject-introspection
 
 # Set up virtual environment:
 ADD *.txt /tmp/requirements/
-RUN python3.9 -m venv venv && \
-    venv/bin/python -m pip install -U pip && \
+# Install with pip rather than `uv pip`: the fbs dependency is a direct URL
+# without an archive extension, which uv rejects but pip resolves.
+RUN uv venv --python 3.14 --seed venv && \
     venv/bin/python -m pip install -r "/tmp/requirements/${requirements}"
 RUN rm -rf /tmp/requirements/
 
