@@ -3,6 +3,7 @@ from fbs_runtime.platform import is_linux, is_windows, is_gnome_based, \
 from fman.impl.util.qt import as_qurl, from_qurl
 from fman.impl.util.qt.thread import run_in_main_thread
 from PyQt5.QtCore import QMimeData
+from PyQt5.QtGui import QClipboard
 from PyQt5.QtWidgets import QApplication
 
 import struct
@@ -18,7 +19,13 @@ def clear():
 
 @run_in_main_thread
 def set_text(text):
-	_clipboard().setText(text)
+	clipboard = _clipboard()
+	clipboard.setText(text)
+	# On X11, terminals paste via middle-click / Shift+Insert from the PRIMARY
+	# selection, which is separate from the CLIPBOARD selection set above. Copy
+	# the text there too so it can be pasted into a terminal:
+	if clipboard.supportsSelection():
+		clipboard.setText(text, QClipboard.Selection)
 
 @run_in_main_thread
 def get_text():
