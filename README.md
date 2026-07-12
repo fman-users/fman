@@ -20,3 +20,7 @@ Then you can use `python build.py` to run, compile etc. fman. For example:
 
 Call `python build.py` without arguments to see a list of available commands.
 This uses [fman build system](https://build-system.fman.io/).
+
+You can run automated tests with `python build.py test`. On Windows, this
+requires Developer Mode (Settings -> System -> Advanced) to be enabled, or some
+tests related to symlinks will fail.
