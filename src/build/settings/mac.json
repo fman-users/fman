@@ -1,7 +1,7 @@
 {
 	"freeze_dir": "target/fman.app",
 	"core_plugin_in_freeze_dir": "${freeze_dir}/Contents/Resources/Plugins/Core",
-	"hidden_imports": ["pty"],
+	"hidden_imports": ["pty", "fman.impl.mac"],
 	"mac_bundle_identifier": "io.fman.fman",
 	"mac_codesign_identity": "Developer ID Application: Omaha Consulting",
 	"info_plist_extra": "<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsArbitraryLoads</key>\n\t\t<true/>\n\t</dict>",
